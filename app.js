@@ -1,4 +1,4 @@
-/* Ritmo: aplicación personal, estática y sin dependencias. Toda la persistencia vive en localStorage. */
+/* Tracker de tareas :D: aplicación personal, estática y sin dependencias. Toda la persistencia vive en localStorage. */
 (() => {
   'use strict';
 
@@ -29,7 +29,7 @@
 
   function normalizeState(raw) {
     if (!raw || typeof raw !== 'object' || !Array.isArray(raw.habits) || !Array.isArray(raw.tasks) || !Array.isArray(raw.projects)) {
-      throw new Error('El archivo no tiene el formato de una copia de Ritmo.');
+      throw new Error('El archivo no tiene el formato esperado para Tracker de tareas :D.');
     }
     const clean = initialState();
     clean.habits = raw.habits.filter(x => x && typeof x === 'object' && x.id && x.name).map(h => ({
@@ -202,7 +202,7 @@
   }
 
   function pageHeader(title, subtitle, action = '') {
-    return `<div class="page-head"><div><p class="eyebrow">Ritmo · ${escapeHTML(today === localDate() ? formatDate(today, { weekday: 'long', day: 'numeric', month: 'long' }) : '')}</p><h1>${title}</h1>${subtitle ? `<p class="subtitle">${subtitle}</p>` : ''}</div>${action}</div>`;
+    return `<div class="page-head"><div><p class="eyebrow">Tracker de tareas :D · ${escapeHTML(today === localDate() ? formatDate(today, { weekday: 'long', day: 'numeric', month: 'long' }) : '')}</p><h1>${title}</h1>${subtitle ? `<p class="subtitle">${subtitle}</p>` : ''}</div>${action}</div>`;
   }
 
   function emptyState(title, text, button = '') {
@@ -417,7 +417,7 @@
   function render() {
     const pages = { home: renderHome, habits: renderHabits, tasks: renderTasks, projects: renderProjects, settings: renderSettings };
     const body = (pages[ui.tab] || renderHome)();
-    app.innerHTML = `<header class="topbar"><div class="brand"><span class="brand-mark">${icon('spark')}</span>ritmo</div><div class="save-status ${storageProblem ? 'error' : ''}" title="${storageProblem ? 'Hay un problema al guardar' : 'Guardado en este dispositivo'}"><i class="save-dot"></i>${storageProblem ? 'Sin guardar' : 'Guardado'}</div></header><main>${body}</main><div class="nav-wrap"><nav class="bottom-nav" aria-label="Navegación principal">${tabMarkup('home', 'Inicio', 'home')}${tabMarkup('habits', 'Hábitos', 'habit')}${tabMarkup('tasks', 'Tareas', 'tasks')}${tabMarkup('projects', 'Proyectos', 'project')}${tabMarkup('settings', 'Ajustes', 'settings')}</nav></div>${modalMarkup()}`;
+    app.innerHTML = `<header class="topbar"><div class="brand"><span class="brand-mark">${icon('spark')}</span>Tracker de tareas :D</div><div class="save-status ${storageProblem ? 'error' : ''}" title="${storageProblem ? 'Hay un problema al guardar' : 'Guardado en este dispositivo'}"><i class="save-dot"></i>${storageProblem ? 'Sin guardar' : 'Guardado'}</div></header><main>${body}</main><div class="nav-wrap"><nav class="bottom-nav" aria-label="Navegación principal">${tabMarkup('home', 'Inicio', 'home')}${tabMarkup('habits', 'Hábitos', 'habit')}${tabMarkup('tasks', 'Tareas', 'tasks')}${tabMarkup('projects', 'Proyectos', 'project')}${tabMarkup('settings', 'Ajustes', 'settings')}</nav></div>${modalMarkup()}`;
     if (ui.modal) setTimeout(() => document.querySelector('#modal-title')?.closest('.modal')?.querySelector('input:not([type=checkbox])')?.focus(), 0);
   }
 
@@ -574,7 +574,7 @@
       const link = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       link.href = objectUrl;
-      link.download = `ritmo-copia-${today}.json`;
+      link.download = `tracker-de-tareas-copia-${today}.json`;
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
       showToast('Copia JSON descargada.');

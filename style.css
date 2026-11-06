@@ -212,4 +212,9 @@ details.history summary { color:var(--muted);font-size:12px;font-weight:700;curs
   .modal-backdrop { place-items:center; }
   .modal { border-radius:24px; }
 }
+@media (max-width:380px) {
+  .topbar { padding-left:14px;padding-right:14px; }
+  .brand { font-size:16px;letter-spacing:-.5px; }
+  .brand-mark { width:30px;height:30px; }
+}
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important; } }

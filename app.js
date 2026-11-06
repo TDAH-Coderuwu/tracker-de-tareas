@@ -202,19 +202,19 @@
   }
 
   function pageHeader(title, subtitle, action = '') {
-    return `<div class="page-head"><div><p class="eyebrow">Tracker de tareas :D · ${escapeHTML(today === localDate() ? formatDate(today, { weekday: 'long', day: 'numeric', month: 'long' }) : '')}</p><h1>${title}</h1>${subtitle ? `<p class="subtitle">${subtitle}</p>` : ''}</div>${action}</div>`;
+    return `<div class="page-head"><div><p class="eyebrow">${escapeHTML(today === localDate() ? formatDate(today, { weekday: 'long', day: 'numeric', month: 'long' }) : '')}</p><h1>${title}</h1>${subtitle ? `<p class="subtitle">${subtitle}</p>` : ''}</div>${action}</div>`;
   }
 
   function emptyState(title, text, button = '') {
     return `<div class="card empty"><div class="empty-icon">${icon('spark')}</div><strong>${title}</strong><p>${text}</p>${button ? `<div style="margin-top:14px">${button}</div>` : ''}</div>`;
   }
 
-  function habitRow(habit, { compact = false } = {}) {
+  function habitRow(habit, { compact = false, showCheck = true } = {}) {
     const checked = isDone(habit.id, today);
     const paused = habit.status === 'paused' || habitPausedOn(habit, today);
     const notScheduledToday = !paused && !isScheduledToday(habit);
     return `<article class="card habit-row">
-      <input class="habit-check" type="checkbox" aria-label="Marcar ${escapeHTML(habit.name)} como completado hoy" data-action="toggle-habit" data-id="${escapeHTML(habit.id)}" ${checked ? 'checked' : ''} ${paused ? 'disabled' : ''}>
+      <input ${showCheck ? '' : 'style="display:none"'} class="habit-check" type="checkbox" aria-label="Marcar ${escapeHTML(habit.name)} como completado hoy" data-action="toggle-habit" data-id="${escapeHTML(habit.id)}" ${checked ? 'checked' : ''} ${paused ? 'disabled' : ''}>
       <div class="habit-info"><div class="habit-title-line"><h3>${escapeHTML(habit.name)}</h3>${paused ? '<span class="tag orange">En pausa</span>' : ''}${notScheduledToday ? `<span class="tag">${habit.frequency.type === 'weekly' ? 'Meta semanal' : 'No toca hoy'}</span>` : ''}${checked ? '<span class="tag green">Hecho hoy</span>' : ''}</div><p>${escapeHTML(compact ? habitTodaySubtitle(habit) : `${habit.description || frequencyLabel(habit)}${habit.goal ? ` · Objetivo: ${habit.goal}` : ''}`)}</p></div>
       ${compact ? '' : `<div class="row-actions"><button class="icon-btn" aria-label="Editar hábito" title="Editar" data-action="edit-habit" data-id="${escapeHTML(habit.id)}">${icon('edit')}</button><button class="icon-btn" aria-label="Eliminar hábito" title="Eliminar" data-action="delete-habit" data-id="${escapeHTML(habit.id)}">${icon('trash')}</button></div>`}
     </article>`;
@@ -313,7 +313,7 @@
     ui.calendarHabit = selected?.id || '';
     return `${pageHeader('Hábitos', 'Rutinas que crecen con constancia.', `<button class="btn" data-action="open-modal" data-modal="habit">${icon('plus')} Nuevo hábito</button>`)}
       ${storageProblem ? `<div class="notice error">${escapeHTML(storageProblem)}</div>` : ''}
-      <section><div class="section-head"><div><h2>Hoy</h2><p>Marca o desmarca cuando quieras.</p></div><span class="tag">${active.filter(h => isScheduledToday(h) && dueStatus(h, today) === 'complete').length}/${active.filter(isScheduledToday).length} programados</span></div><div class="stack">${active.length ? active.map(h => habitRow(h)).join('') : emptyState('Aún no hay hábitos activos', 'Puedes crear uno nuevo o reanudar un hábito en pausa.')}</div></section>
+      <section><div class="section-head"><div><h2>Hoy</h2><p>Marca tus hábitos desde Inicio; aquí puedes organizarlos y revisar su historial.</p></div><span class="tag">${active.filter(h => isScheduledToday(h) && dueStatus(h, today) === 'complete').length}/${active.filter(isScheduledToday).length} programados</span></div><div class="stack">${active.length ? active.map(h => habitRow(h, { showCheck: false })).join('') : emptyState('Aún no hay hábitos activos', 'Puedes crear uno nuevo o reanudar un hábito en pausa.')}</div></section>
       ${paused.length ? `<section class="section"><div class="section-head"><div><h2>En pausa</h2><p>Su historial sigue guardado.</p></div></div><div class="stack">${paused.map(h => `<article class="card habit-row"><div class="habit-info"><div class="habit-title-line"><h3>${escapeHTML(h.name)}</h3><span class="tag orange">En pausa</span></div><p>${escapeHTML(h.description || frequencyLabel(h))}</p></div><button class="btn secondary small" data-action="resume-habit" data-id="${escapeHTML(h.id)}">Reanudar</button><button class="icon-btn" aria-label="Editar hábito" data-action="edit-habit" data-id="${escapeHTML(h.id)}">${icon('edit')}</button></article>`).join('')}</div></section>` : ''}
       ${selected ? `<section class="section"><div class="section-head"><div><h2>Seguimiento</h2><p>Elige un hábito y consulta el mes.</p></div></div><div style="margin-bottom:10px"><select class="select" aria-label="Hábito del calendario" data-action="calendar-select">${state.habits.map(h => `<option value="${escapeHTML(h.id)}" ${h.id === selected.id ? 'selected' : ''}>${escapeHTML(h.name)}</option>`).join('')}</select></div>${calendarFor(selected)}</section>` : ''}`;
   }

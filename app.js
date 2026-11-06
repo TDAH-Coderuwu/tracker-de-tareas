@@ -16,7 +16,7 @@
   const weekdayIndex = key => (dateFromKey(key).getDay() + 6) % 7;
   const formatDate = (key, options = { day: 'numeric', month: 'short' }) => dateFromKey(key).toLocaleDateString('es-CL', options);
   const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  const deepCopy = value => JSON.parse(JSON.stringify(value));
+  const deepCopy = value => JSON.parse(JSON.stringify(value)); const validHexColor = (value, fallback) => /^#[0-9a-f]{6}$/i.test(value || '') ? value.toLowerCase() : fallback; const complementaryColor = hex => { const [r,g,b] = hex.slice(1).match(/../g).map(c => parseInt(c,16)/255); const max=Math.max(r,g,b), min=Math.min(r,g,b), delta=max-min, light=(max+min)/2; let hue=0, sat=0; if(delta){ sat=delta/(1-Math.abs(2*light-1)); if(max===r) hue=60*(((g-b)/delta)%6); else if(max===g) hue=60*((b-r)/delta+2); else hue=60*((r-g)/delta+4); } hue=((hue+360)%360+180)%360; const chroma=(1-Math.abs(2*light-1))*sat, part=hue/60, cross=chroma*(1-Math.abs(part%2-1)), match=light-chroma/2; const rgb=part<1?[chroma,cross,0]:part<2?[cross,chroma,0]:part<3?[0,chroma,cross]:part<4?[0,cross,chroma]:part<5?[cross,0,chroma]:[chroma,0,cross]; return '#'+rgb.map(v=>Math.round((v+match)*255).toString(16).padStart(2,'0')).join(''); }; const luminance = hex => { const c=hex.slice(1).match(/../g).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2); return .2126*c[0]+.7152*c[1]+.0722*c[2]; }; const contrastRatio = (a,b) => { const v=[luminance(a),luminance(b)].sort((x,y)=>y-x); return (v[0]+.05)/(v[1]+.05); }; const contrastText = hex => contrastRatio(hex,'#ffffff')>=contrastRatio(hex,'#20233a')?'#ffffff':'#20233a'; const heroContrastText = (a,b) => Math.min(contrastRatio(a,'#ffffff'),contrastRatio(b,'#ffffff'))>=Math.min(contrastRatio(a,'#20233a'),contrastRatio(b,'#20233a'))?'#ffffff':'#20233a';
 
   const initialState = () => ({
     version: 1,
@@ -24,7 +24,7 @@
     habitLogs: {},
     tasks: [],
     projects: [],
-    settings: { theme: 'light' }
+    settings: { theme: 'light', appearance: 'light', customPrimary: '#6d62db', customSecondary: '#8e79e5', complementaryPrimary: '#6d62db' }
   });
 
   function normalizeState(raw) {
@@ -58,7 +58,7 @@
       milestones: Array.isArray(p.milestones) ? p.milestones.filter(m => m && m.id && m.text).map(m => ({ id: String(m.id), text: String(m.text), done: !!m.done })) : [],
       logs: Array.isArray(p.logs) ? p.logs.filter(l => l && l.id && l.text).map(l => ({ id: String(l.id), text: String(l.text), date: /^\d{4}-\d{2}-\d{2}$/.test(l.date || '') ? l.date : localDate() })) : []
     }));
-    clean.settings.theme = raw.settings?.theme === 'dark' ? 'dark' : 'light';
+    const appearance = ['light', 'dark', 'custom', 'complementary'].includes(raw.settings?.appearance) ? raw.settings.appearance : raw.settings?.theme === 'dark' ? 'dark' : 'light'; clean.settings.appearance = appearance; clean.settings.theme = appearance === 'dark' ? 'dark' : 'light'; clean.settings.customPrimary = validHexColor(raw.settings?.customPrimary, '#6d62db'); clean.settings.customSecondary = validHexColor(raw.settings?.customSecondary, '#8e79e5'); clean.settings.complementaryPrimary = validHexColor(raw.settings?.complementaryPrimary, '#6d62db');
     return clean;
   }
 
@@ -74,7 +74,7 @@
 
   const ui = { tab: 'home', modal: null, calendarHabit: '', calendarMonth: new Date().getMonth(), calendarYear: new Date().getFullYear(), taskFilter: 'all' };
   let toastTimer;
-  function applyTheme() { const isDark = state.settings.theme === 'dark'; document.documentElement.dataset.theme = isDark ? 'dark' : 'light'; const meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = isDark ? '#151622' : '#f6f7fb'; const current = document.querySelector('meta[name="theme-color"]'); if (current) current.replaceWith(meta); else document.head.append(meta); }
+  function applyTheme() { const appearance = state.settings.appearance || (state.settings.theme === 'dark' ? 'dark' : 'light'); const isDark = appearance === 'dark'; document.documentElement.dataset.theme = isDark ? 'dark' : 'light'; const defaults = isDark ? { primary: '#aaa1ff', secondary: '#8e79e5' } : { primary: '#6d62db', secondary: '#8e79e5' }; const primary = appearance === 'custom' ? state.settings.customPrimary : appearance === 'complementary' ? state.settings.complementaryPrimary : defaults.primary; const secondary = appearance === 'custom' ? state.settings.customSecondary : appearance === 'complementary' ? complementaryColor(primary) : defaults.secondary; const root = document.documentElement; root.style.setProperty('--accent', primary); root.style.setProperty('--accent-secondary', secondary); root.style.setProperty('--accent-soft', 'color-mix(in srgb, ' + primary + ' 14%, var(--surface))'); root.style.setProperty('--accent-contrast', contrastText(primary)); root.style.setProperty('--accent-ink', contrastRatio(primary, isDark ? '#202131' : '#ffffff') >= 4.5 ? primary : (isDark ? '#f0f0f8' : '#20233a')); root.style.setProperty('--hero-contrast', heroContrastText(primary, secondary)); const meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = isDark ? '#151622' : '#f6f7fb'; const current = document.querySelector('meta[name="theme-color"]'); if (current) current.replaceWith(meta); else document.head.append(meta); }
   applyTheme();
 
   function persist() {
@@ -349,15 +349,7 @@
       ${section('Activos', active, 'Aún no tienes proyectos activos.')}${paused.length ? section('En pausa', paused, 'Sin proyectos en pausa.') : ''}${finished.length ? section('Terminados', finished, 'Sin proyectos terminados.') : ''}`;
   }
 
-  function renderSettings() {
-    return `${pageHeader('Ajustes', 'Tus datos permanecen en este navegador.')}
-      ${storageProblem ? `<div class="notice error" style="margin-bottom:12px">${escapeHTML(storageProblem)}</div>` : ''}
-      ${location.protocol === 'file:' ? '<div class="notice" style="margin-bottom:12px">Para un comportamiento confiable de almacenamiento, abre la aplicación desde un sitio estático HTTPS o un servidor local. Los navegadores pueden tratar distinto los archivos file://.</div>' : ''}
-      <section class="card settings-card"><div class="settings-row"><div><h3>Apariencia</h3><p>Elige un tema cómodo para ti.</p></div><label style="display:flex;align-items:center;gap:9px;color:var(--muted);font-size:12px"><span>${state.settings.theme === 'dark' ? 'Oscuro' : 'Claro'}</span><input type="checkbox" class="switch" data-action="theme-toggle" ${state.settings.theme === 'dark' ? 'checked' : ''} aria-label="Activar modo oscuro"></label></div></section>
-      <section class="card settings-card"><h3>Copia de seguridad</h3><p>Exporta tus hábitos, historial, tareas y proyectos en un archivo JSON. Importar una copia reemplaza los datos actuales de este navegador.</p><div class="toolbar" style="margin-top:14px"><button class="btn secondary" data-action="export">${icon('download')} Exportar JSON</button><button class="btn ghost" data-action="choose-import">${icon('upload')} Importar JSON</button><input type="file" class="file-input" id="import-file" accept="application/json,.json"></div><p class="footnote">La copia no se envía a ningún servidor. Guárdala en un lugar seguro para usarla si cambias de navegador.</p></section>
-      <section class="card settings-card"><h3>Almacenamiento</h3><p>Los cambios se guardan automáticamente en localStorage de este navegador. Los datos no se sincronizan entre dispositivos; borrar los datos del navegador también los elimina. Puedes comprobar que sigan ahí cerrando y reabriendo esta misma dirección en Chrome.</p></section>
-      <section class="card settings-card"><div class="settings-row"><div><h3>Eliminar todos los datos</h3><p>Elimina hábitos, registros, tareas e historial de proyectos de este navegador.</p></div><button class="btn danger small" data-action="clear-all">Borrar todo</button></div></section>`;
-  }
+  function renderSettings() { const appearance = state.settings.appearance || (state.settings.theme === 'dark' ? 'dark' : 'light'); let appearanceFields = ''; if (appearance === 'custom') appearanceFields = '<div class="color-picker-grid"><label class="color-control"><span><strong>Color principal</strong><small>Botones y detalles</small></span><input type="color" aria-label="Elegir color principal" data-action="custom-color" data-setting="customPrimary" value="' + state.settings.customPrimary + '"></label><label class="color-control"><span><strong>Color secundario</strong><small>Degradados y progreso</small></span><input type="color" aria-label="Elegir color secundario" data-action="custom-color" data-setting="customSecondary" value="' + state.settings.customSecondary + '"></label></div>'; else if (appearance === 'complementary') { const opposite = complementaryColor(state.settings.complementaryPrimary); appearanceFields = '<label class="color-control"><span><strong>Elige un color base</strong><small>El segundo será su opuesto</small></span><input type="color" aria-label="Elegir color base" data-action="custom-color" data-setting="complementaryPrimary" value="' + state.settings.complementaryPrimary + '"></label><div class="color-preview"><span>Color complementario</span><i class="color-swatch" style="background:' + opposite + '" aria-hidden="true"></i><code>' + opposite + '</code></div><p class="appearance-help">Calculado a 180° en la rueda de color, manteniendo el mismo brillo y saturación.</p>'; } return pageHeader('Ajustes', 'Tus datos permanecen en este navegador.') + (storageProblem ? '<div class="notice error" style="margin-bottom:12px">' + escapeHTML(storageProblem) + '</div>' : '') + (location.protocol === 'file:' ? '<div class="notice" style="margin-bottom:12px">Para un comportamiento confiable de almacenamiento, abre la aplicación desde un sitio estático HTTPS o un servidor local. Los navegadores pueden tratar distinto los archivos file://.</div>' : '') + '<section class="card settings-card"><h3>Apariencia</h3><p>Elige un tema o personaliza tus dos colores principales.</p><div class="field appearance-mode-field"><label for="appearance-mode">Estilo</label><select id="appearance-mode" class="select" data-action="appearance-mode"><option value="light"' + (appearance === 'light' ? ' selected' : '') + '>Claro</option><option value="dark"' + (appearance === 'dark' ? ' selected' : '') + '>Oscuro</option><option value="custom"' + (appearance === 'custom' ? ' selected' : '') + '>A tu gusto · dos colores</option><option value="complementary"' + (appearance === 'complementary' ? ' selected' : '') + '>Complementarios · opuestos en la rueda</option></select></div>' + appearanceFields + '</section>' + '<section class="card settings-card"><h3>Copia de seguridad</h3><p>Exporta tus hábitos, historial, tareas y proyectos en un archivo JSON. Importar una copia reemplaza los datos actuales de este navegador.</p><div class="toolbar" style="margin-top:14px"><button class="btn secondary" data-action="export">' + icon('download') + ' Exportar JSON</button><button class="btn ghost" data-action="choose-import">' + icon('upload') + ' Importar JSON</button><input type="file" class="file-input" id="import-file" accept="application/json,.json"></div><p class="footnote">La copia no se envía a ningún servidor. Guárdala en un lugar seguro para usarla si cambias de navegador.</p></section>' + '<section class="card settings-card"><h3>Almacenamiento</h3><p>Los cambios se guardan automáticamente en localStorage de este navegador. Los datos no se sincronizan entre dispositivos; borrar los datos del navegador también los elimina. Puedes comprobar que sigan ahí cerrando y reabriendo esta misma dirección en Chrome.</p></section>' + '<section class="card settings-card"><div class="settings-row"><div><h3>Eliminar todos los datos</h3><p>Elimina hábitos, registros, tareas e historial de proyectos de este navegador.</p></div><button class="btn danger small" data-action="clear-all">Borrar todo</button></div></section>'; }
 
   function tabMarkup(id, label, iconName) {
     return `<button class="tab-btn ${ui.tab === id ? 'active' : ''}" data-action="set-tab" data-tab="${id}" aria-current="${ui.tab === id ? 'page' : 'false'}">${icon(iconName)}<span>${label}</span></button>`;
@@ -494,7 +486,7 @@
     if (action === 'choose-import') document.getElementById('import-file')?.click();
     if (action === 'clear-all') {
       if (confirm('¿Borrar todos tus hábitos, registros, tareas e historial de proyectos de este navegador? Esta acción no se puede deshacer.')) {
-        const theme = state.settings.theme; state = initialState(); state.settings.theme = theme; commit('Datos eliminados.');
+        const settings = deepCopy(state.settings); state = initialState(); state.settings = settings; applyTheme(); commit('Datos eliminados.');
       }
     }
   });
@@ -502,9 +494,7 @@
   app.addEventListener('change', event => {
     const target = event.target;
     if (target.matches('[data-action="calendar-select"]')) { ui.calendarHabit = target.value; render(); } if (target.matches('[data-action="move-habit-range"]')) { if (moveHabitToPosition(target.dataset.id, Number(target.value) - 1)) commit('Orden de hábitos actualizado.'); }
-    if (target.matches('[data-action="theme-toggle"]')) {
-      state.settings.theme = target.checked ? 'dark' : 'light'; applyTheme(); commit('Apariencia actualizada.');
-    }
+    if (target.matches('[data-action="appearance-mode"]')) { if (!['light', 'dark', 'custom', 'complementary'].includes(target.value)) return; state.settings.appearance = target.value; state.settings.theme = target.value === 'dark' ? 'dark' : 'light'; applyTheme(); commit('Apariencia actualizada.'); } if (target.matches('[data-action="custom-color"]')) { const key = target.dataset.setting; const fallback = key === 'customSecondary' ? '#8e79e5' : '#6d62db'; if (!['customPrimary', 'customSecondary', 'complementaryPrimary'].includes(key)) return; state.settings[key] = validHexColor(target.value, fallback); applyTheme(); commit('Color guardado.'); }
     if (target.matches('[data-action="move-task"]')) {
       const task = state.tasks.find(t => t.id === target.dataset.id);
       if (task) { task.category = target.value; commit('Tarea movida.'); }

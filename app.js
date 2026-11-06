@@ -121,7 +121,7 @@
       upload: '<path d="M12 15V3m0 0L8 7m4-4 4 4M5 17v3h14v-3"/>',
       moon: '<path d="M20.5 14.5A8 8 0 0 1 9.5 3.5 8.5 8.5 0 1 0 20.5 14.5Z"/>',
       close: '<path d="m18 6-12 12M6 6l12 12"/>',
-      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', up: '<path d="m6 14 6-6 6 6"/>', down: '<path d="m6 10 6 6 6-6"/>'
     };
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ''}</svg>`;
   };
@@ -209,14 +209,14 @@
     return `<div class="card empty"><div class="empty-icon">${icon('spark')}</div><strong>${title}</strong><p>${text}</p>${button ? `<div style="margin-top:14px">${button}</div>` : ''}</div>`;
   }
 
-  function habitRow(habit, { compact = false, showCheck = true } = {}) {
+  function habitOrderControls(habit) { const siblings = state.habits.filter(item => item.status === habit.status); const index = siblings.findIndex(item => item.id === habit.id); return `<input class="order-range" type="range" min="1" max="${siblings.length}" value="${index + 1}" aria-label="Posición de ${escapeHTML(habit.name)}" data-action="move-habit-range" data-id="${escapeHTML(habit.id)}"><div class="order-arrows"><button class="icon-btn order-btn" aria-label="Mover arriba" data-action="move-habit" data-id="${escapeHTML(habit.id)}" data-direction="-1" ${index <= 0 ? 'disabled' : ''}>${icon('up')}</button><button class="icon-btn order-btn" aria-label="Mover abajo" data-action="move-habit" data-id="${escapeHTML(habit.id)}" data-direction="1" ${index >= siblings.length - 1 ? 'disabled' : ''}>${icon('down')}</button></div>`; } function moveHabitToPosition(id, position) { const habit = state.habits.find(item => item.id === id); if (!habit) return false; const indexes = state.habits.map((item, index) => item.status === habit.status ? index : -1).filter(index => index >= 0); const siblings = indexes.map(index => state.habits[index]); const current = siblings.findIndex(item => item.id === id); const target = Math.max(0, Math.min(siblings.length - 1, position)); if (current < 0 || current === target) return false; const [moved] = siblings.splice(current, 1); siblings.splice(target, 0, moved); indexes.forEach((index, i) => { state.habits[index] = siblings[i]; }); return true; } function habitRow(habit, { compact = false, showCheck = true } = {}) {
     const checked = isDone(habit.id, today);
     const paused = habit.status === 'paused' || habitPausedOn(habit, today);
     const notScheduledToday = !paused && !isScheduledToday(habit);
-    return `<article class="card habit-row">
+    return `<article class="card habit-row ${compact ? '' : 'manage-habit-row'}">
       <input ${showCheck ? '' : 'style="display:none"'} class="habit-check" type="checkbox" aria-label="Marcar ${escapeHTML(habit.name)} como completado hoy" data-action="toggle-habit" data-id="${escapeHTML(habit.id)}" ${checked ? 'checked' : ''} ${paused ? 'disabled' : ''}>
       <div class="habit-info"><div class="habit-title-line"><h3>${escapeHTML(habit.name)}</h3>${paused ? '<span class="tag orange">En pausa</span>' : ''}${notScheduledToday ? `<span class="tag">${habit.frequency.type === 'weekly' ? 'Meta semanal' : 'No toca hoy'}</span>` : ''}${checked ? '<span class="tag green">Hecho hoy</span>' : ''}</div><p>${escapeHTML(compact ? habitTodaySubtitle(habit) : `${habit.description || frequencyLabel(habit)}${habit.goal ? ` · Objetivo: ${habit.goal}` : ''}`)}</p></div>
-      ${compact ? '' : `<div class="row-actions"><button class="icon-btn" aria-label="Editar hábito" title="Editar" data-action="edit-habit" data-id="${escapeHTML(habit.id)}">${icon('edit')}</button><button class="icon-btn" aria-label="Eliminar hábito" title="Eliminar" data-action="delete-habit" data-id="${escapeHTML(habit.id)}">${icon('trash')}</button></div>`}
+      ${compact ? '' : `<div class="row-actions">${habitOrderControls(habit)}<button class="icon-btn" aria-label="Editar hábito" title="Editar" data-action="edit-habit" data-id="${escapeHTML(habit.id)}">${icon('edit')}</button><button class="icon-btn" aria-label="Eliminar hábito" title="Eliminar" data-action="delete-habit" data-id="${escapeHTML(habit.id)}">${icon('trash')}</button></div>`}
     </article>`;
   }
 
@@ -314,7 +314,7 @@
     return `${pageHeader('Hábitos', 'Rutinas que crecen con constancia.', `<button class="btn" data-action="open-modal" data-modal="habit">${icon('plus')} Nuevo hábito</button>`)}
       ${storageProblem ? `<div class="notice error">${escapeHTML(storageProblem)}</div>` : ''}
       <section><div class="section-head"><div><h2>Hoy</h2><p>Marca tus hábitos desde Inicio; aquí puedes organizarlos y revisar su historial.</p></div><span class="tag">${active.filter(h => isScheduledToday(h) && dueStatus(h, today) === 'complete').length}/${active.filter(isScheduledToday).length} programados</span></div><div class="stack">${active.length ? active.map(h => habitRow(h, { showCheck: false })).join('') : emptyState('Aún no hay hábitos activos', 'Puedes crear uno nuevo o reanudar un hábito en pausa.')}</div></section>
-      ${paused.length ? `<section class="section"><div class="section-head"><div><h2>En pausa</h2><p>Su historial sigue guardado.</p></div></div><div class="stack">${paused.map(h => `<article class="card habit-row"><div class="habit-info"><div class="habit-title-line"><h3>${escapeHTML(h.name)}</h3><span class="tag orange">En pausa</span></div><p>${escapeHTML(h.description || frequencyLabel(h))}</p></div><button class="btn secondary small" data-action="resume-habit" data-id="${escapeHTML(h.id)}">Reanudar</button><button class="icon-btn" aria-label="Editar hábito" data-action="edit-habit" data-id="${escapeHTML(h.id)}">${icon('edit')}</button></article>`).join('')}</div></section>` : ''}
+      ${paused.length ? `<section class="section"><div class="section-head"><div><h2>En pausa</h2><p>Su historial sigue guardado.</p></div></div><div class="stack">${paused.map(h => `<article class="card habit-row manage-habit-row"><div class="habit-info"><div class="habit-title-line"><h3>${escapeHTML(h.name)}</h3><span class="tag orange">En pausa</span></div><p>${escapeHTML(h.description || frequencyLabel(h))}</p></div><div class="row-actions">${habitOrderControls(h)}<button class="btn secondary small" data-action="resume-habit" data-id="${escapeHTML(h.id)}">Reanudar</button><button class="icon-btn" aria-label="Editar hábito" data-action="edit-habit" data-id="${escapeHTML(h.id)}">${icon('edit')}</button><button class="icon-btn" aria-label="Eliminar hábito" data-action="delete-habit" data-id="${escapeHTML(h.id)}">${icon('trash')}</button></div></article>`).join('')}</div></section>` : ''}
       ${selected ? `<section class="section"><div class="section-head"><div><h2>Seguimiento</h2><p>Elige un hábito y consulta el mes.</p></div></div><div style="margin-bottom:10px"><select class="select" aria-label="Hábito del calendario" data-action="calendar-select">${state.habits.map(h => `<option value="${escapeHTML(h.id)}" ${h.id === selected.id ? 'selected' : ''}>${escapeHTML(h.name)}</option>`).join('')}</select></div>${calendarFor(selected)}</section>` : ''}`;
   }
 
@@ -442,7 +442,7 @@
     const id = button.dataset.id;
     if (action === 'set-tab') { ui.tab = button.dataset.tab; ui.modal = null; render(); window.scrollTo(0, 0); }
     if (action === 'open-modal') openModal(button.dataset.modal);
-    if (action === 'edit-habit') openModal('habit', id);
+    if (action === 'edit-habit') openModal('habit', id); if (action === 'move-habit') { const habit = state.habits.find(item => item.id === id); const siblings = habit ? state.habits.filter(item => item.status === habit.status) : []; const current = siblings.findIndex(item => item.id === id); if (moveHabitToPosition(id, current + Number(button.dataset.direction))) commit('Orden de hábitos actualizado.'); }
     if (action === 'edit-task') openModal('task', id);
     if (action === 'edit-project') openModal('project', id);
     if (action === 'close-modal') closeModal();
@@ -505,7 +505,7 @@
 
   app.addEventListener('change', event => {
     const target = event.target;
-    if (target.matches('[data-action="calendar-select"]')) { ui.calendarHabit = target.value; render(); }
+    if (target.matches('[data-action="calendar-select"]')) { ui.calendarHabit = target.value; render(); } if (target.matches('[data-action="move-habit-range"]')) { if (moveHabitToPosition(target.dataset.id, Number(target.value) - 1)) commit('Orden de hábitos actualizado.'); }
     if (target.matches('[data-action="theme-toggle"]')) {
       state.settings.theme = target.checked ? 'dark' : 'light'; applyTheme(); commit('Apariencia actualizada.');
     }

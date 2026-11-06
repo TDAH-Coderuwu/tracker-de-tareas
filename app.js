@@ -74,11 +74,7 @@
 
   const ui = { tab: 'home', modal: null, calendarHabit: '', calendarMonth: new Date().getMonth(), calendarYear: new Date().getFullYear(), taskFilter: 'all' };
   let toastTimer;
-  function applyTheme() {
-    document.documentElement.dataset.theme = state.settings.theme;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = state.settings.theme === 'dark' ? '#151622' : '#f6f7fb';
-  }
+  function applyTheme() { const isDark = state.settings.theme === 'dark'; document.documentElement.dataset.theme = isDark ? 'dark' : 'light'; const meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = isDark ? '#151622' : '#f6f7fb'; const current = document.querySelector('meta[name="theme-color"]'); if (current) current.replaceWith(meta); else document.head.append(meta); }
   applyTheme();
 
   function persist() {

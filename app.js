@@ -108,7 +108,7 @@
       habit: '<path d="M20 7 10 17l-5-5"/><path d="M12 3a9 9 0 1 0 9 9"/>',
       tasks: '<rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 9h8M8 13h8M8 17h5M9 2v4M15 2v4"/>',
       project: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-10Z"/><path d="M12 11v6M9 14h6"/>',
-      settings: '<circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.1.9-1.1 1.9-1.4-.5a7.8 7.8 0 0 1-1.6.9l-.3 1.5h-2.2l-.3-1.5a7.8 7.8 0 0 1-1.6-.9l-1.4.5-1.1-1.9 1.1-.9a6.5 6.5 0 0 1 0-1.9l-1.1-.9 1.1-1.9 1.4.5a7.8 7.8 0 0 1 1.6-.9l.3-1.5h2.2l.3 1.5a7.8 7.8 0 0 1 1.6.9l1.4-.5 1.1 1.9-1.1.9a6.5 6.5 0 0 1 0 1.9Z"/>',
+      settings: '<circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.1.9-1.1 1.9-1.4-.5a7.8 7.8 0 0 1-1.6.9l-.3 1.5h-2.2l-.3-1.5a7.8 7.8 0 0 1-1.6-.9l-1.4.5-.5-1.9 1.1-.9a6.5 6.5 0 0 1 0-1.9l-1.1-.9 1.1-1.9 1.4.5a7.8 7.8 0 0 1 1.6-.9l.3-1.5h2.2l.3 1.5a7.8 7.8 0 0 1 1.6.9l1.4-.5 1.1 1.9-1.1.9a6.5 6.5 0 0 1 0 1.9Z"/>',
       plus: '<path d="M12 5v14M5 12h14"/>',
       edit: '<path d="m15 5 4 4M4 20l4-.8L19 8a2.1 2.1 0 0 0-3-3L5 16l-1 4Z"/>',
       trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"/>',
@@ -117,7 +117,8 @@
       upload: '<path d="M12 15V3m0 0L8 7m4-4 4 4M5 17v3h14v-3"/>',
       moon: '<path d="M20.5 14.5A8 8 0 0 1 9.5 3.5 8.5 8.5 0 1 0 20.5 14.5Z"/>',
       close: '<path d="m18 6-12 12M6 6l12 12"/>',
-      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', up: '<path d="m6 14 6-6 6 6"/>', down: '<path d="m6 10 6 6 6-6"/>'
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', up: '<path d="m6 14 6-6 6 6"/>', down: '<path d="m6 10 6 6 6-6"/>',
+      grip: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>'
     };
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ''}</svg>`;
   };
@@ -205,18 +206,45 @@
     return `<div class="card empty"><div class="empty-icon">${icon('spark')}</div><strong>${title}</strong><p>${text}</p>${button ? `<div style="margin-top:14px">${button}</div>` : ''}</div>`;
   }
 
-  function habitOrderControls(habit) { const siblings = state.habits.filter(item => item.status === habit.status); const index = siblings.findIndex(item => item.id === habit.id); return `<input class="order-range" type="range" min="1" max="${siblings.length}" value="${index + 1}" aria-label="Posición de ${escapeHTML(habit.name)}" data-action="move-habit-range" data-id="${escapeHTML(habit.id)}"><div class="order-arrows"><button class="icon-btn order-btn" aria-label="Mover arriba" data-action="move-habit" data-id="${escapeHTML(habit.id)}" data-direction="-1" ${index <= 0 ? 'disabled' : ''}>${icon('up')}</button><button class="icon-btn order-btn" aria-label="Mover abajo" data-action="move-habit" data-id="${escapeHTML(habit.id)}" data-direction="1" ${index >= siblings.length - 1 ? 'disabled' : ''}>${icon('down')}</button></div>`; } function moveHabitToPosition(id, position) { const habit = state.habits.find(item => item.id === id); if (!habit) return false; const indexes = state.habits.map((item, index) => item.status === habit.status ? index : -1).filter(index => index >= 0); const siblings = indexes.map(index => state.habits[index]); const current = siblings.findIndex(item => item.id === id); const target = Math.max(0, Math.min(siblings.length - 1, position)); if (current < 0 || current === target) return false; const [moved] = siblings.splice(current, 1); siblings.splice(target, 0, moved); indexes.forEach((index, i) => { state.habits[index] = siblings[i]; }); return true; } function habitRow(habit, { compact = false, showCheck = true } = {}) {
+  // Controles para ordenar: el asa permite arrastrar con el dedo o el ratón; las flechas siguen disponibles como alternativa.
+  function habitOrderControls(habit) {
+    const siblings = state.habits.filter(item => item.status === habit.status);
+    const index = siblings.findIndex(item => item.id === habit.id);
+    return `<div class="habit-order-controls">
+      <button class="icon-btn habit-drag-handle" type="button" aria-label="Arrastrar ${escapeHTML(habit.name)} para cambiar su posición" title="Mantén pulsado y arrastra para ordenar" data-action="drag-habit" data-id="${escapeHTML(habit.id)}">${icon('grip')}</button>
+      <div class="order-arrows">
+        <button class="icon-btn order-btn" type="button" aria-label="Mover arriba" data-action="move-habit" data-id="${escapeHTML(habit.id)}" data-direction="-1" ${index <= 0 ? 'disabled' : ''}>${icon('up')}</button>
+        <button class="icon-btn order-btn" type="button" aria-label="Mover abajo" data-action="move-habit" data-id="${escapeHTML(habit.id)}" data-direction="1" ${index >= siblings.length - 1 ? 'disabled' : ''}>${icon('down')}</button>
+      </div>
+    </div>`;
+  }
+
+  function moveHabitToPosition(id, position) {
+    const habit = state.habits.find(item => item.id === id);
+    if (!habit) return false;
+    const indexes = state.habits.map((item, index) => item.status === habit.status ? index : -1).filter(index => index >= 0);
+    const siblings = indexes.map(index => state.habits[index]);
+    const current = siblings.findIndex(item => item.id === id);
+    const target = Math.max(0, Math.min(siblings.length - 1, position));
+    if (current < 0 || current === target) return false;
+    const [moved] = siblings.splice(current, 1);
+    siblings.splice(target, 0, moved);
+    indexes.forEach((index, i) => { state.habits[index] = siblings[i]; });
+    return true;
+  }
+
+  function habitRow(habit, { compact = false, showCheck = true } = {}) {
     const checked = isDone(habit.id, today);
     const paused = habit.status === 'paused' || habitPausedOn(habit, today);
     const notScheduledToday = !paused && !isScheduledToday(habit);
-    return `<article class="card habit-row ${compact ? '' : 'manage-habit-row'}">
+    const orderAttributes = compact ? '' : `data-habit-order-row data-habit-id="${escapeHTML(habit.id)}" data-habit-status="${escapeHTML(habit.status)}"`;
+    return `<article class="card habit-row ${compact ? '' : 'manage-habit-row'}" ${orderAttributes}>
       <input ${showCheck ? '' : 'style="display:none"'} class="habit-check" type="checkbox" aria-label="Marcar ${escapeHTML(habit.name)} como completado hoy" data-action="toggle-habit" data-id="${escapeHTML(habit.id)}" ${checked ? 'checked' : ''} ${paused ? 'disabled' : ''}>
       <div class="habit-info"><div class="habit-title-line"><h3>${escapeHTML(habit.name)}</h3>${paused ? '<span class="tag orange">En pausa</span>' : ''}${notScheduledToday ? `<span class="tag">${habit.frequency.type === 'weekly' ? 'Meta semanal' : 'No toca hoy'}</span>` : ''}${checked ? '<span class="tag green">Hecho hoy</span>' : ''}</div><p>${escapeHTML(compact ? habitTodaySubtitle(habit) : `${habit.description || frequencyLabel(habit)}${habit.goal ? ` · Objetivo: ${habit.goal}` : ''}`)}</p></div>
       ${compact ? '' : `<div class="row-actions">${habitOrderControls(habit)}<button class="icon-btn" aria-label="Editar hábito" title="Editar" data-action="edit-habit" data-id="${escapeHTML(habit.id)}">${icon('edit')}</button><button class="icon-btn" aria-label="Eliminar hábito" title="Eliminar" data-action="delete-habit" data-id="${escapeHTML(habit.id)}">${icon('trash')}</button></div>`}
     </article>`;
-  }
-
-  function taskCard(task, { history = false } = {}) {
+      }
+    function taskCard(task, { history = false } = {}) {
     const categoryLabel = { urgent: 'Urgente', soon: 'Pronto', later: 'Después' }[task.category];
     const overdue = task.status === 'pending' && task.dueDate && task.dueDate < today;
     return `<article class="card task-card">
@@ -310,7 +338,7 @@
     return `${pageHeader('Hábitos', 'Rutinas que crecen con constancia.', `<button class="btn" data-action="open-modal" data-modal="habit">${icon('plus')} Nuevo hábito</button>`)}
       ${storageProblem ? `<div class="notice error">${escapeHTML(storageProblem)}</div>` : ''}
       <section><div class="section-head"><div><h2>Hoy</h2><p>Marca tus hábitos desde Inicio; aquí puedes organizarlos y revisar su historial.</p></div><span class="tag">${active.filter(h => isScheduledToday(h) && dueStatus(h, today) === 'complete').length}/${active.filter(isScheduledToday).length} programados</span></div><div class="stack">${active.length ? active.map(h => habitRow(h, { showCheck: false })).join('') : emptyState('Aún no hay hábitos activos', 'Puedes crear uno nuevo o reanudar un hábito en pausa.')}</div></section>
-      ${paused.length ? `<section class="section"><div class="section-head"><div><h2>En pausa</h2><p>Su historial sigue guardado.</p></div></div><div class="stack">${paused.map(h => `<article class="card habit-row manage-habit-row"><div class="habit-info"><div class="habit-title-line"><h3>${escapeHTML(h.name)}</h3><span class="tag orange">En pausa</span></div><p>${escapeHTML(h.description || frequencyLabel(h))}</p></div><div class="row-actions">${habitOrderControls(h)}<button class="btn secondary small" data-action="resume-habit" data-id="${escapeHTML(h.id)}">Reanudar</button><button class="icon-btn" aria-label="Editar hábito" data-action="edit-habit" data-id="${escapeHTML(h.id)}">${icon('edit')}</button><button class="icon-btn" aria-label="Eliminar hábito" data-action="delete-habit" data-id="${escapeHTML(h.id)}">${icon('trash')}</button></div></article>`).join('')}</div></section>` : ''}
+      ${paused.length ? `<section class="section"><div class="section-head"><div><h2>En pausa</h2><p>Su historial sigue guardado.</p></div></div><div class="stack">${paused.map(h => `<article class="card habit-row manage-habit-row" data-habit-order-row data-habit-id="${escapeHTML(h.id)}" data-habit-status="paused"><div class="habit-info"><div class="habit-title-line"><h3>${escapeHTML(h.name)}</h3><span class="tag orange">En pausa</span></div><p>${escapeHTML(h.description || frequencyLabel(h))}</p></div><div class="row-actions">${habitOrderControls(h)}<button class="btn secondary small" data-action="resume-habit" data-id="${escapeHTML(h.id)}">Reanudar</button><button class="icon-btn" aria-label="Editar hábito" data-action="edit-habit" data-id="${escapeHTML(h.id)}">${icon('edit')}</button><button class="icon-btn" aria-label="Eliminar hábito" data-action="delete-habit" data-id="${escapeHTML(h.id)}">${icon('trash')}</button></div></article>`).join('')}</div></section>` : ''}
       ${selected ? `<section class="section"><div class="section-head"><div><h2>Seguimiento</h2><p>Elige un hábito y consulta el mes.</p></div></div><div style="margin-bottom:10px"><select class="select" aria-label="Hábito del calendario" data-action="calendar-select">${state.habits.map(h => `<option value="${escapeHTML(h.id)}" ${h.id === selected.id ? 'selected' : ''}>${escapeHTML(h.name)}</option>`).join('')}</select></div>${calendarFor(selected)}</section>` : ''}`;
   }
 
@@ -349,7 +377,7 @@
       ${section('Activos', active, 'Aún no tienes proyectos activos.')}${paused.length ? section('En pausa', paused, 'Sin proyectos en pausa.') : ''}${finished.length ? section('Terminados', finished, 'Sin proyectos terminados.') : ''}`;
   }
 
-  function renderSettings() { const appearance = state.settings.appearance || (state.settings.theme === 'dark' ? 'dark' : 'light'); let appearanceFields = ''; if (appearance === 'custom') appearanceFields = '<div class="color-picker-grid"><label class="color-control"><span><strong>Color principal</strong><small>Botones y detalles</small></span><input type="color" aria-label="Elegir color principal" data-action="custom-color" data-setting="customPrimary" value="' + state.settings.customPrimary + '"></label><label class="color-control"><span><strong>Color secundario</strong><small>Degradados y progreso</small></span><input type="color" aria-label="Elegir color secundario" data-action="custom-color" data-setting="customSecondary" value="' + state.settings.customSecondary + '"></label></div>'; else if (appearance === 'complementary') { const opposite = complementaryColor(state.settings.complementaryPrimary); appearanceFields = '<label class="color-control"><span><strong>Elige un color base</strong><small>El segundo será su opuesto</small></span><input type="color" aria-label="Elegir color base" data-action="custom-color" data-setting="complementaryPrimary" value="' + state.settings.complementaryPrimary + '"></label><div class="color-preview"><span>Color complementario</span><i class="color-swatch" style="background:' + opposite + '" aria-hidden="true"></i><code>' + opposite + '</code></div><p class="appearance-help">Calculado a 180° en la rueda de color, manteniendo el mismo brillo y saturación.</p>'; } return pageHeader('Ajustes', 'Tus datos permanecen en este navegador.') + (storageProblem ? '<div class="notice error" style="margin-bottom:12px">' + escapeHTML(storageProblem) + '</div>' : '') + (location.protocol === 'file:' ? '<div class="notice" style="margin-bottom:12px">Para un comportamiento confiable de almacenamiento, abre la aplicación desde un sitio estático HTTPS o un servidor local. Los navegadores pueden tratar distinto los archivos file://.</div>' : '') + '<section class="card settings-card"><h3>Apariencia</h3><p>Elige un tema o personaliza tus dos colores principales.</p><div class="field appearance-mode-field"><label for="appearance-mode">Estilo</label><select id="appearance-mode" class="select" data-action="appearance-mode"><option value="light"' + (appearance === 'light' ? ' selected' : '') + '>Claro</option><option value="dark"' + (appearance === 'dark' ? ' selected' : '') + '>Oscuro</option><option value="custom"' + (appearance === 'custom' ? ' selected' : '') + '>A tu gusto · dos colores</option><option value="complementary"' + (appearance === 'complementary' ? ' selected' : '') + '>Complementarios · opuestos en la rueda</option></select></div>' + appearanceFields + '</section>' + '<section class="card settings-card"><h3>Copia de seguridad</h3><p>Exporta tus hábitos, historial, tareas y proyectos en un archivo JSON. Importar una copia reemplaza los datos actuales de este navegador.</p><div class="toolbar" style="margin-top:14px"><button class="btn secondary" data-action="export">' + icon('download') + ' Exportar JSON</button><button class="btn ghost" data-action="choose-import">' + icon('upload') + ' Importar JSON</button><input type="file" class="file-input" id="import-file" accept="application/json,.json"></div><p class="footnote">La copia no se envía a ningún servidor. Guárdala en un lugar seguro para usarla si cambias de navegador.</p></section>' + '<section class="card settings-card"><h3>Almacenamiento</h3><p>Los cambios se guardan automáticamente en localStorage de este navegador. Los datos no se sincronizan entre dispositivos; borrar los datos del navegador también los elimina. Puedes comprobar que sigan ahí cerrando y reabriendo esta misma dirección en Chrome.</p></section>' + '<section class="card settings-card"><div class="settings-row"><div><h3>Eliminar todos los datos</h3><p>Elimina hábitos, registros, tareas e historial de proyectos de este navegador.</p></div><button class="btn danger small" data-action="clear-all">Borrar todo</button></div></section>'; }
+  function renderSettings() { const appearance = state.settings.appearance || (state.settings.theme === 'dark' ? 'dark' : 'light'); let appearanceFields = ''; if (appearance === 'custom') appearanceFields = '<div class="color-picker-grid"><label class="color-control"><span><strong>Color principal</strong><small>Botones y detalles</small></span><input type="color" aria-label="Elegir color principal" data-action="custom-color" data-setting="customPrimary" value="' + state.settings.customPrimary + '"></label><label class="color-control"><span><strong>Color secundario</strong><small>Degradados y progreso</small></span><input type="color" aria-label="Elegir color secundario" data-action="custom-color" data-setting="customSecondary" value="' + state.settings.customSecondary + '"></label></div>'; else if (appearance === 'complementary') { const opposite = complementaryColor(state.settings.complementaryPrimary); appearanceFields = '<label class="color-control"><span><strong>Elige un color base</strong><small>El segundo será su opuesto</small></span><input type="color" aria-label="Elegir color base" data-action="custom-color" data-setting="complementaryPrimary" value="' + state.settings.complementaryPrimary + '"></label><div class="color-preview"><span>Color complementario</span><i class="color-swatch" style="background:' + opposite + '" aria-hidden="true"></i><code>' + opposite + '</code></div><p class="appearance-help">Calculado a 180° en la rueda de color, manteniendo el mismo brillo y saturación.</p>'; } return pageHeader('Ajustes', 'Tus datos permanecen en este navegador.') + (storageProblem ? '<div class="notice error" style="margin-bottom:12px">' + escapeHTML(storageProblem) + '</div>' : '') + (location.protocol === 'file:' ? '<div class="notice" style="margin-bottom:12px">Para un comportamiento confiable de almacenamiento, abre la aplicación desde un sitio estático HTTPS o un servidor local. Los navegadores pueden tratar distinto los archivos file://.</div>' : '') + '<section class="card settings-card"><h3>Apariencia</h3><p>Elige un tema o personaliza tus dos colores principales.</p><div class="field appearance-mode-field"><label for="appearance-mode">Estilo</label><select id="appearance-mode" class="select" data-action="appearance-mode"><option value="light"' + (appearance === 'light' ? ' selected' : '') + '>Claro</option><option value="dark"' + (appearance === 'dark' ? ' selected' : '') + '>Oscuro</option><option value="custom"' + (appearance === 'custom' ? ' selected' : '') + '>A tu gusto · dos colores</option><option value="complementary"' + (appearance === 'complementary' ? ' selected' : '') + '>Complementarios · opuestos en la rueda</option></select></div>' + appearanceFields + '</section>' + '<section class="card settings-card"><h3>Copia de seguridad</h3><p>Exporta tus hábitos, historial, tareas y proyectos en un archivo JSON. Importar una copia reemplaza los datos actuales de este navegador.</p><div class="toolbar" style="margin-top:14px"><button class="btn secondary" data-action="export">' + icon('download') + ' Exportar JSON</button><button class="btn ghost" data-action="choose-import">' + icon('upload') + ' Importar JSON</button><input type="file" class="file-input" id="import-file" accept="application/json,.json"></div><p class="footnote">La copia no se envía a ningún servidor. Guárdala en un lugar seguro para usarla si cambias de navegador.</p></section>' + '<section class="card settings-card"><h3>Almacenamiento</h3><p>Los cambios se guardan automáticamente en localStorage de este navegador. Los datos no se sincronizan entre dispositivos; borrar los datos del navegador también los elimina. Puedes comprobar que sigan ahí cerrando y reabriendo esta misma dirección en Chrome.</p></section>' + '<section class="card settings-card"><div class="settings-row"><div><h3>Eliminar todos los datos</h3><p>Elimina hábitos, registros, tareas e historial de avances de proyectos de este navegador.</p></div><button class="btn danger small" data-action="clear-all">Borrar todo</button></div></section>'; }
 
   function tabMarkup(id, label, iconName) {
     return `<button class="tab-btn ${ui.tab === id ? 'active' : ''}" data-action="set-tab" data-tab="${id}" aria-current="${ui.tab === id ? 'page' : 'false'}">${icon(iconName)}<span>${label}</span></button>`;
@@ -401,8 +429,7 @@
     if (type === 'project') return projectForm(state.projects.find(p => p.id === id));
     return '';
   }
-
-  function render() {
+    function render() {
     const pages = { home: renderHome, habits: renderHabits, tasks: renderTasks, projects: renderProjects, settings: renderSettings };
     const body = (pages[ui.tab] || renderHome)();
     app.innerHTML = `<header class="topbar"><div class="brand"><span class="brand-mark">${icon('spark')}</span>Tracker de tareas :D</div><div class="save-status ${storageProblem ? 'error' : ''}" title="${storageProblem ? 'Hay un problema al guardar' : 'Guardado en este dispositivo'}"><i class="save-dot"></i>${storageProblem ? 'Sin guardar' : 'Guardado'}</div></header><main>${body}</main><div class="nav-wrap"><nav class="bottom-nav" aria-label="Navegación principal">${tabMarkup('home', 'Inicio', 'home')}${tabMarkup('habits', 'Hábitos', 'habit')}${tabMarkup('tasks', 'Tareas', 'tasks')}${tabMarkup('projects', 'Proyectos', 'project')}${tabMarkup('settings', 'Ajustes', 'settings')}</nav></div>${modalMarkup()}`;
@@ -422,6 +449,100 @@
 
   function openModal(type, id = '') { ui.modal = `${type}${id ? `:${id}` : ''}`; render(); }
   function closeModal() { ui.modal = null; render(); }
+
+  // Estado temporal del gesto de arrastre. No modifica los datos hasta soltar el hábito.
+  let habitDrag = null;
+
+  function startHabitDrag(event) {
+    const handle = event.target.closest('[data-action="drag-habit"]');
+    if (!handle || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+
+    const row = handle.closest('[data-habit-order-row]');
+    const list = row?.parentElement;
+    if (!row || !list || habitDrag) return;
+
+    event.preventDefault();
+    const rect = row.getBoundingClientRect();
+    const placeholder = document.createElement('div');
+    placeholder.className = 'habit-drop-placeholder';
+    placeholder.setAttribute('aria-hidden', 'true');
+    placeholder.style.height = `${rect.height}px`;
+
+    const ghost = row.cloneNode(true);
+    ghost.classList.add('habit-drag-ghost');
+    ghost.removeAttribute('data-habit-order-row');
+    ghost.style.width = `${rect.width}px`;
+    ghost.style.height = `${rect.height}px`;
+    ghost.style.left = `${rect.left}px`;
+    ghost.style.top = `${rect.top}px`;
+
+    row.replaceWith(placeholder);
+    document.body.append(ghost);
+
+    habitDrag = {
+      id: row.dataset.habitId,
+      pointerId: event.pointerId,
+      row,
+      list,
+      placeholder,
+      ghost,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top
+    };
+  }
+
+  function moveHabitDrag(event) {
+    const drag = habitDrag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    event.preventDefault();
+
+    drag.ghost.style.left = `${event.clientX - drag.offsetX}px`;
+    drag.ghost.style.top = `${event.clientY - drag.offsetY}px`;
+
+    // Permite seguir ordenando listas largas sin tener que soltar el elemento para desplazar la página.
+    const edge = 76;
+    if (event.clientY < edge) window.scrollBy(0, -Math.max(5, (edge - event.clientY) * 0.18));
+    else if (event.clientY > window.innerHeight - edge) window.scrollBy(0, Math.max(5, (event.clientY - (window.innerHeight - edge)) * 0.18));
+
+    const rows = [...drag.list.children].filter(child => child.matches('[data-habit-order-row]'));
+    const nextRow = rows.find(candidate => {
+      const box = candidate.getBoundingClientRect();
+      return event.clientY < box.top + box.height / 2;
+    });
+
+    if (nextRow) drag.list.insertBefore(drag.placeholder, nextRow);
+    else drag.list.append(drag.placeholder);
+  }
+
+  function finishHabitDrag(event, cancelled = false) {
+    const drag = habitDrag;
+    if (!drag || (event && event.pointerId !== drag.pointerId)) return;
+    habitDrag = null;
+
+    let targetPosition = 0;
+    if (!cancelled && drag.placeholder.isConnected) {
+      for (const child of drag.list.children) {
+        if (child === drag.placeholder) break;
+        if (child.matches('[data-habit-order-row]')) targetPosition++;
+      }
+    }
+
+    const moved = !cancelled && drag.placeholder.isConnected && moveHabitToPosition(drag.id, targetPosition);
+    drag.ghost.remove();
+
+    if (moved) {
+      drag.placeholder.remove();
+      commit('Orden de hábitos actualizado.');
+    } else if (drag.placeholder.isConnected) {
+      drag.placeholder.replaceWith(drag.row);
+    }
+  }
+
+  app.addEventListener('pointerdown', startHabitDrag);
+  document.addEventListener('pointermove', moveHabitDrag, { passive: false });
+  document.addEventListener('pointerup', event => finishHabitDrag(event));
+  document.addEventListener('pointercancel', event => finishHabitDrag(event, true));
+  window.addEventListener('blur', () => finishHabitDrag(null, true));
 
   app.addEventListener('click', event => {
     const button = event.target.closest('[data-action]');
@@ -493,7 +614,7 @@
 
   app.addEventListener('change', event => {
     const target = event.target;
-    if (target.matches('[data-action="calendar-select"]')) { ui.calendarHabit = target.value; render(); } if (target.matches('[data-action="move-habit-range"]')) { if (moveHabitToPosition(target.dataset.id, Number(target.value) - 1)) commit('Orden de hábitos actualizado.'); }
+    if (target.matches('[data-action="calendar-select"]')) { ui.calendarHabit = target.value; render(); }
     if (target.matches('[data-action="appearance-mode"]')) { if (!['light', 'dark', 'custom', 'complementary'].includes(target.value)) return; state.settings.appearance = target.value; state.settings.theme = target.value === 'dark' ? 'dark' : 'light'; applyTheme(); commit('Apariencia actualizada.'); } if (target.matches('[data-action="custom-color"]')) { const key = target.dataset.setting; const fallback = key === 'customSecondary' ? '#8e79e5' : '#6d62db'; if (!['customPrimary', 'customSecondary', 'complementaryPrimary'].includes(key)) return; state.settings[key] = validHexColor(target.value, fallback); applyTheme(); commit('Color guardado.'); }
     if (target.matches('[data-action="move-task"]')) {
       const task = state.tasks.find(t => t.id === target.dataset.id);

@@ -17,7 +17,27 @@
   const weekdayIndex = key => (dateFromKey(key).getDay() + 6) % 7;
   const formatDate = (key, options = { day: 'numeric', month: 'short' }) => dateFromKey(key).toLocaleDateString('es-CL', options);
   const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  const deepCopy = value => JSON.parse(JSON.stringify(value)); const validHexColor = (value, fallback) => /^#[0-9a-f]{6}$/i.test(value || '') ? value.toLowerCase() : fallback; const complementaryColor = hex => { const [r,g,b] = hex.slice(1).match(/../g).map(c => parseInt(c,16)/255); const max=Math.max(r,g,b), min=Math.min(r,g,b), delta=max-min, light=(max+min)/2; let hue=0, sat=0; if(delta){ sat=delta/(1-Math.abs(2*light-1)); if(max===r) hue=60*(((g-b)/delta)%6); else if(max===g) hue=60*((b-r)/delta+2); else hue=60*((r-g)/delta+4); } hue=((hue+360)%360+180)%360; const chroma=(1-Math.abs(2*light-1))*sat, part=hue/60, cross=chroma*(1-Math.abs(part%2-1)), match=light-chroma/2; const rgb=part<1?[chroma,cross,0]:part<2?[cross,chroma,0]:part<3?[0,chroma,cross]:part<4?[0,cross,chroma]:part<5?[cross,0,chroma]:[chroma,0,cross]; return '#'+rgb.map(v=>Math.round((v+match)*255).toString(16).padStart(2,'0')).join(''); }; const luminance = hex => { const c=hex.slice(1).match(/../g).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2); return .2126*c[0]+.7152*c[1]+.0722*c[2]; }; const contrastRatio = (a,b) => { const v=[luminance(a),luminance(b)].sort((x,y)=>y-x); return (v[0]+.05)/(v[1]+.05); }; const contrastText = hex => contrastRatio(hex,'#ffffff')>=contrastRatio(hex,'#20233a')?'#ffffff':'#20233a'; const heroContrastText = (a,b) => Math.min(contrastRatio(a,'#ffffff'),contrastRatio(b,'#ffffff'))>=Math.min(contrastRatio(a,'#20233a'),contrastRatio(b,'#20233a'))?'#ffffff':'#20233a';
+  const deepCopy = value => JSON.parse(JSON.stringify(value));
+  const validHexColor = (value, fallback) => /^#[0-9a-f]{6}$/i.test(value || '') ? value.toLowerCase() : fallback;
+  const complementaryColor = hex => { const [r,g,b] = hex.slice(1).match(/../g).map(c => parseInt(c,16)/255); const max=Math.max(r,g,b), min=Math.min(r,g,b), delta=max-min, light=(max+min)/2; let hue=0, sat=0; if(delta){ sat=delta/(1-Math.abs(2*light-1)); if(max===r) hue=60*(((g-b)/delta)%6); else if(max===g) hue=60*((b-r)/delta+2); else hue=60*((r-g)/delta+4); } hue=((hue+360)%360+180)%360; const chroma=(1-Math.abs(2*light-1))*sat, part=hue/60, cross=chroma*(1-Math.abs(part%2-1)), match=light-chroma/2; const rgb=part<1?[chroma,cross,0]:part<2?[cross,chroma,0]:part<3?[0,chroma,cross]:part<4?[0,cross,chroma]:part<5?[cross,0,chroma]:[chroma,0,cross]; return '#'+rgb.map(v=>Math.round((v+match)*255).toString(16).padStart(2,'0')).join(''); };
+  const luminance = hex => { const c=hex.slice(1).match(/../g).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2); return .2126*c[0]+.7152*c[1]+.0722*c[2]; };
+  const contrastRatio = (a,b) => { const v=[luminance(a),luminance(b)].sort((x,y)=>y-x); return (v[0]+.05)/(v[1]+.05); };
+  const contrastText = hex => contrastRatio(hex,'#ffffff')>=contrastRatio(hex,'#20233a')?'#ffffff':'#20233a';
+  const mixHex = (base, tint, amount) => {
+    const from=base.slice(1).match(/../g).map(v=>parseInt(v,16));
+    const to=tint.slice(1).match(/../g).map(v=>parseInt(v,16));
+    return '#'+from.map((value,index)=>Math.round(value+(to[index]-value)*amount).toString(16).padStart(2,'0')).join('');
+  };
+  const ensureTextContrast = (background, foreground, minimum=4.5) => {
+    if (contrastRatio(background,foreground)>=minimum) return background;
+    const target=foreground==='#ffffff'?'#000000':'#ffffff';
+    for (let amount=.02;amount<=1;amount+=.02) {
+      const adjusted=mixHex(background,target,amount);
+      if (contrastRatio(adjusted,foreground)>=minimum) return adjusted;
+    }
+    return background;
+  };
+  const heroContrastText = (a,b) => Math.min(contrastRatio(a,'#ffffff'),contrastRatio(b,'#ffffff'))>=Math.min(contrastRatio(a,'#20233a'),contrastRatio(b,'#20233a'))?'#ffffff':'#20233a';
 
   const initialState = () => ({
     version: 1,
@@ -87,7 +107,57 @@
 
   const ui = { tab: 'home', modal: null, calendarHabit: '', calendarMonth: new Date().getMonth(), calendarYear: new Date().getFullYear(), taskFilter: 'all', habitMenuId: '', newHabitColor: null };
   let toastTimer;
-  function applyTheme() { const appearance = state.settings.appearance || (state.settings.theme === 'dark' ? 'dark' : 'light'); const isDark = appearance === 'dark'; document.documentElement.dataset.theme = isDark ? 'dark' : 'light'; const defaults = isDark ? { primary: '#aaa1ff', secondary: '#8e79e5' } : { primary: '#6d62db', secondary: '#8e79e5' }; const primary = appearance === 'custom' ? state.settings.customPrimary : appearance === 'complementary' ? state.settings.complementaryPrimary : defaults.primary; const secondary = appearance === 'custom' ? state.settings.customSecondary : appearance === 'complementary' ? complementaryColor(primary) : defaults.secondary; const root = document.documentElement; root.style.setProperty('--accent', primary); root.style.setProperty('--accent-secondary', secondary); root.style.setProperty('--accent-soft', 'color-mix(in srgb, ' + primary + ' 14%, var(--surface))'); root.style.setProperty('--accent-contrast', contrastText(primary)); root.style.setProperty('--accent-ink', contrastRatio(primary, isDark ? '#202131' : '#ffffff') >= 4.5 ? primary : (isDark ? '#f0f0f8' : '#20233a')); root.style.setProperty('--hero-contrast', heroContrastText(primary, secondary)); const meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = isDark ? '#151622' : '#f6f7fb'; const current = document.querySelector('meta[name="theme-color"]'); if (current) current.replaceWith(meta); else document.head.append(meta); }
+  function applyTheme() {
+    const appearance=state.settings.appearance || (state.settings.theme==='dark'?'dark':'light');
+    const isDark=appearance==='dark';
+    const isCustom=appearance==='custom' || appearance==='complementary';
+    const defaults=isDark?{primary:'#aaa1ff',secondary:'#8e79e5'}:{primary:'#6d62db',secondary:'#8e79e5'};
+    const selectedPrimary=appearance==='custom'?state.settings.customPrimary:appearance==='complementary'?state.settings.complementaryPrimary:defaults.primary;
+    const selectedSecondary=appearance==='custom'?state.settings.customSecondary:appearance==='complementary'?complementaryColor(selectedPrimary):defaults.secondary;
+    const primary=ensureTextContrast(selectedPrimary,contrastText(selectedPrimary));
+    const secondary=selectedSecondary;
+    const root=document.documentElement;
+    root.dataset.theme=isDark?'dark':isCustom?'custom':'light';
+
+    if (isCustom) {
+      const background=mixHex('#ffffff',selectedPrimary,.075);
+      const surface=mixHex('#ffffff',selectedSecondary,.045);
+      const surfaceSoft=mixHex('#ffffff',selectedPrimary,.14);
+      const accentSoft=mixHex(surface,primary,.14);
+      const text='#20233a';
+      const muted=mixHex('#596075',selectedPrimary,.06);
+      const line=mixHex('#e8eaf1',selectedSecondary,.22);
+      root.style.setProperty('--bg',background);
+      root.style.setProperty('--surface',surface);
+      root.style.setProperty('--surface-soft',surfaceSoft);
+      root.style.setProperty('--text',text);
+      root.style.setProperty('--muted',contrastRatio(muted,background)>=4.5?muted:'#53596d');
+      root.style.setProperty('--line',line);
+      root.style.setProperty('--accent-soft',accentSoft);
+      root.style.setProperty('--shadow','0 12px 36px color-mix(in srgb, '+selectedPrimary+' 14%, transparent)');
+    } else {
+      for (const name of ['--bg','--surface','--surface-soft','--text','--muted','--line','--accent-soft','--shadow']) root.style.removeProperty(name);
+    }
+
+    // PWA hint only: the browser/Android still owns the native navigation bar and icon flags.
+    const systemNavColor=isDark||isCustom?'#000000':'#f6f7fb';
+    root.style.setProperty('--system-nav-bg',systemNavColor);
+    root.style.setProperty('--accent',primary);
+    root.style.setProperty('--accent-secondary',secondary);
+    root.style.setProperty('--accent-contrast',contrastText(primary));
+    const accentSoft=isCustom?mixHex(mixHex('#ffffff',selectedSecondary,.045),primary,.14):isDark?'#35314f':'#eeecff';
+    root.style.setProperty('--accent-ink',contrastRatio(primary,accentSoft)>=4.5?primary:(isDark?'#f0f0f8':'#20233a'));
+    const heroText=heroContrastText(primary,secondary);
+    root.style.setProperty('--hero-contrast',heroText);
+    root.style.setProperty('--hero-start',ensureTextContrast(primary,heroText));
+    root.style.setProperty('--hero-end',ensureTextContrast(secondary,heroText));
+
+    const meta=document.createElement('meta');
+    meta.name='theme-color';
+    meta.content=systemNavColor;
+    const current=document.querySelector('meta[name="theme-color"]');
+    if (current) current.replaceWith(meta); else document.head.append(meta);
+  }
   applyTheme();
 
   function persist() {
@@ -426,7 +496,7 @@
       ${section('Activos', active, 'Aún no tienes proyectos activos.')}${paused.length ? section('En pausa', paused, 'Sin proyectos en pausa.') : ''}${finished.length ? section('Terminados', finished, 'Sin proyectos terminados.') : ''}`;
   }
 
-  function renderSettings() { const appearance = state.settings.appearance || (state.settings.theme === 'dark' ? 'dark' : 'light'); let appearanceFields = ''; if (appearance === 'custom') appearanceFields = '<div class="color-picker-grid"><label class="color-control"><span><strong>Color principal</strong><small>Botones y detalles</small></span><input type="color" aria-label="Elegir color principal" data-action="custom-color" data-setting="customPrimary" value="' + state.settings.customPrimary + '"></label><label class="color-control"><span><strong>Color secundario</strong><small>Degradados y progreso</small></span><input type="color" aria-label="Elegir color secundario" data-action="custom-color" data-setting="customSecondary" value="' + state.settings.customSecondary + '"></label></div>'; else if (appearance === 'complementary') { const opposite = complementaryColor(state.settings.complementaryPrimary); appearanceFields = '<label class="color-control"><span><strong>Elige un color base</strong><small>El segundo será su opuesto</small></span><input type="color" aria-label="Elegir color base" data-action="custom-color" data-setting="complementaryPrimary" value="' + state.settings.complementaryPrimary + '"></label><div class="color-preview"><span>Color complementario</span><i class="color-swatch" style="background:' + opposite + '" aria-hidden="true"></i><code>' + opposite + '</code></div><p class="appearance-help">Calculado a 180° en la rueda de color, manteniendo el mismo brillo y saturación.</p>'; } return pageHeader('Ajustes', 'Tus datos permanecen en este navegador.') + (storageProblem ? '<div class="notice error" style="margin-bottom:12px">' + escapeHTML(storageProblem) + '</div>' : '') + (location.protocol === 'file:' ? '<div class="notice" style="margin-bottom:12px">Para un comportamiento confiable de almacenamiento, abre la aplicación desde un sitio estático HTTPS o un servidor local. Los navegadores pueden tratar distinto los archivos file://.</div>' : '') + '<section class="card settings-card"><h3>Apariencia</h3><p>Elige un tema o personaliza tus dos colores principales.</p><div class="field appearance-mode-field"><label for="appearance-mode">Estilo</label><select id="appearance-mode" class="select" data-action="appearance-mode"><option value="light"' + (appearance === 'light' ? ' selected' : '') + '>Claro</option><option value="dark"' + (appearance === 'dark' ? ' selected' : '') + '>Oscuro</option><option value="custom"' + (appearance === 'custom' ? ' selected' : '') + '>A tu gusto · dos colores</option><option value="complementary"' + (appearance === 'complementary' ? ' selected' : '') + '>Complementarios · opuestos en la rueda</option></select></div>' + appearanceFields + '</section>' + '<section class="card settings-card"><h3>Copia de seguridad</h3><p>Exporta tus hábitos, historial, tareas y proyectos en un archivo JSON. Importar una copia reemplaza los datos actuales de este navegador.</p><div class="toolbar" style="margin-top:14px"><button class="btn secondary" data-action="export">' + icon('download') + ' Exportar JSON</button><button class="btn ghost" data-action="choose-import">' + icon('upload') + ' Importar JSON</button><input type="file" class="file-input" id="import-file" accept="application/json,.json"></div><p class="footnote">La copia no se envía a ningún servidor. Guárdala en un lugar seguro para usarla si cambias de navegador.</p></section>' + '<section class="card settings-card"><h3>Almacenamiento</h3><p>Los cambios se guardan automáticamente en localStorage de este navegador. Los datos no se sincronizan entre dispositivos; borrar los datos del navegador también los elimina. Puedes comprobar que sigan ahí cerrando y reabriendo esta misma dirección en Chrome.</p></section>' + '<section class="card settings-card"><div class="settings-row"><div><h3>Eliminar todos los datos</h3><p>Elimina hábitos, registros, tareas e historial de avances de proyectos de este navegador.</p></div><button class="btn danger small" data-action="clear-all">Borrar todo</button></div></section>'; }
+  function renderSettings() { const appearance = state.settings.appearance || (state.settings.theme === 'dark' ? 'dark' : 'light'); let appearanceFields = ''; if (appearance === 'custom') appearanceFields = '<div class="color-picker-grid"><label class="color-control"><span><strong>Color principal</strong><small>Superficies y acciones</small></span><input type="color" aria-label="Elegir color principal" data-action="custom-color" data-setting="customPrimary" value="' + state.settings.customPrimary + '"></label><label class="color-control"><span><strong>Color secundario</strong><small>Paneles y degradados</small></span><input type="color" aria-label="Elegir color secundario" data-action="custom-color" data-setting="customSecondary" value="' + state.settings.customSecondary + '"></label></div>'; else if (appearance === 'complementary') { const opposite = complementaryColor(state.settings.complementaryPrimary); appearanceFields = '<label class="color-control"><span><strong>Elige un color base</strong><small>El segundo será su opuesto</small></span><input type="color" aria-label="Elegir color base" data-action="custom-color" data-setting="complementaryPrimary" value="' + state.settings.complementaryPrimary + '"></label><div class="color-preview"><span>Color complementario</span><i class="color-swatch" style="background:' + opposite + '" aria-hidden="true"></i><code>' + opposite + '</code></div><p class="appearance-help">Calculado como color opuesto; las superficies y textos mantienen contraste.</p>'; } return pageHeader('Ajustes', 'Tus datos permanecen en este navegador.') + (storageProblem ? '<div class="notice error" style="margin-bottom:12px">' + escapeHTML(storageProblem) + '</div>' : '') + (location.protocol === 'file:' ? '<div class="notice" style="margin-bottom:12px">Para un comportamiento confiable de almacenamiento, abre la aplicación desde un sitio estático HTTPS o un servidor local. Los navegadores pueden tratar distinto los archivos file://.</div>' : '') + '<section class="card settings-card"><h3>Apariencia</h3><p>Elige un tema o una paleta que se aplique también a fondos, tarjetas y controles.</p><div class="field appearance-mode-field"><label for="appearance-mode">Estilo</label><select id="appearance-mode" class="select" data-action="appearance-mode"><option value="light"' + (appearance === 'light' ? ' selected' : '') + '>Claro</option><option value="dark"' + (appearance === 'dark' ? ' selected' : '') + '>Oscuro</option><option value="custom"' + (appearance === 'custom' ? ' selected' : '') + '>Colores individuales · global</option><option value="complementary"' + (appearance === 'complementary' ? ' selected' : '') + '>Color base + opuesto</option></select></div>' + appearanceFields + '<p class="appearance-help">La barra inferior de Android pertenece al sistema: Tracker solicita un color, pero Android decide el fondo y los iconos finales.</p></section>' + '<section class="card settings-card"><h3>Copia de seguridad</h3><p>Exporta tus hábitos, historial, tareas y proyectos en un archivo JSON. Importar una copia reemplaza los datos actuales de este navegador.</p><div class="toolbar" style="margin-top:14px"><button class="btn secondary" data-action="export">' + icon('download') + ' Exportar JSON</button><button class="btn ghost" data-action="choose-import">' + icon('upload') + ' Importar JSON</button><input type="file" class="file-input" id="import-file" accept="application/json,.json"></div><p class="footnote">La copia no se envía a ningún servidor. Guárdala en un lugar seguro para usarla si cambias de navegador.</p></section>' + '<section class="card settings-card"><h3>Almacenamiento</h3><p>Los cambios se guardan automáticamente en localStorage de este navegador. Los datos no se sincronizan entre dispositivos; borrar los datos del navegador también los elimina. Puedes comprobar que sigan ahí cerrando y reabriendo esta misma dirección en Chrome.</p></section>' + '<section class="card settings-card"><div class="settings-row"><div><h3>Eliminar todos los datos</h3><p>Elimina hábitos, registros, tareas e historial de avances de proyectos de este navegador.</p></div><button class="btn danger small" data-action="clear-all">Borrar todo</button></div></section>'; }
 
   function tabMarkup(id, label, iconName) {
     return `<button class="tab-btn ${ui.tab === id ? 'active' : ''}" data-action="set-tab" data-tab="${id}" aria-current="${ui.tab === id ? 'page' : 'false'}">${icon(iconName)}<span>${label}</span></button>`;

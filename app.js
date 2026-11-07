@@ -5,6 +5,7 @@
   const STORAGE_KEY = 'ritmo.personal.v1';
   const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+  const HABIT_COLORS = ['#3478c8', '#e38b32', '#8661c5', '#238c78', '#d35269', '#668f36', '#397aa0', '#c34e9a', '#a06a32', '#5a68c8', '#bd704f', '#458b51'];
   const app = document.getElementById('app');
   const toastEl = document.getElementById('toast');
 
@@ -27,13 +28,25 @@
     settings: { theme: 'light', appearance: 'light', customPrimary: '#6d62db', customSecondary: '#8e79e5', complementaryPrimary: '#6d62db' }
   });
 
+  function nextHabitColor() {
+    const usage = new Map(HABIT_COLORS.map(color => [color, 0]));
+    for (const habit of state?.habits || []) {
+      const color = validHexColor(habit.color, '');
+      if (usage.has(color)) usage.set(color, usage.get(color) + 1);
+    }
+    const leastUsed = Math.min(...usage.values());
+    const choices = [...usage].filter(([, count]) => count === leastUsed).map(([color]) => color);
+    return choices[Math.floor(Math.random() * choices.length)];
+  }
+
   function normalizeState(raw) {
     if (!raw || typeof raw !== 'object' || !Array.isArray(raw.habits) || !Array.isArray(raw.tasks) || !Array.isArray(raw.projects)) {
       throw new Error('El archivo no tiene el formato esperado para Tracker de tareas :D.');
     }
     const clean = initialState();
-    clean.habits = raw.habits.filter(x => x && typeof x === 'object' && x.id && x.name).map(h => ({
+    clean.habits = raw.habits.filter(x => x && typeof x === 'object' && x.id && x.name).map((h, index) => ({
       id: String(h.id), name: String(h.name), description: String(h.description || ''), goal: String(h.goal || ''),
+      color: validHexColor(h.color, HABIT_COLORS[index % HABIT_COLORS.length]),
       startDate: /^\d{4}-\d{2}-\d{2}$/.test(h.startDate || '') ? h.startDate : localDate(),
       status: h.status === 'paused' ? 'paused' : 'active',
       frequency: ['daily', 'weekdays', 'alternate', 'weekly'].includes(h.frequency?.type) ? {
@@ -72,7 +85,7 @@
     storageProblem = error instanceof SyntaxError ? 'Los datos guardados no se pudieron leer. Importa una copia de seguridad para recuperarlos.' : 'El navegador bloqueó el almacenamiento local. Revisa sus permisos o abre la aplicación desde una dirección HTTPS.';
   }
 
-  const ui = { tab: 'home', modal: null, calendarHabit: '', calendarMonth: new Date().getMonth(), calendarYear: new Date().getFullYear(), taskFilter: 'all' };
+  const ui = { tab: 'home', modal: null, calendarHabit: '', calendarMonth: new Date().getMonth(), calendarYear: new Date().getFullYear(), taskFilter: 'all', habitMenuId: '', newHabitColor: null };
   let toastTimer;
   function applyTheme() { const appearance = state.settings.appearance || (state.settings.theme === 'dark' ? 'dark' : 'light'); const isDark = appearance === 'dark'; document.documentElement.dataset.theme = isDark ? 'dark' : 'light'; const defaults = isDark ? { primary: '#aaa1ff', secondary: '#8e79e5' } : { primary: '#6d62db', secondary: '#8e79e5' }; const primary = appearance === 'custom' ? state.settings.customPrimary : appearance === 'complementary' ? state.settings.complementaryPrimary : defaults.primary; const secondary = appearance === 'custom' ? state.settings.customSecondary : appearance === 'complementary' ? complementaryColor(primary) : defaults.secondary; const root = document.documentElement; root.style.setProperty('--accent', primary); root.style.setProperty('--accent-secondary', secondary); root.style.setProperty('--accent-soft', 'color-mix(in srgb, ' + primary + ' 14%, var(--surface))'); root.style.setProperty('--accent-contrast', contrastText(primary)); root.style.setProperty('--accent-ink', contrastRatio(primary, isDark ? '#202131' : '#ffffff') >= 4.5 ? primary : (isDark ? '#f0f0f8' : '#20233a')); root.style.setProperty('--hero-contrast', heroContrastText(primary, secondary)); const meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = isDark ? '#151622' : '#f6f7fb'; const current = document.querySelector('meta[name="theme-color"]'); if (current) current.replaceWith(meta); else document.head.append(meta); }
   applyTheme();
@@ -233,6 +246,18 @@
     return true;
   }
 
+  function habitAdminMenu(habit) {
+    const isOpen = ui.habitMenuId === habit.id;
+    return `<div class="habit-admin">
+      <button class="icon-btn" type="button" aria-label="Administrar ${escapeHTML(habit.name)}" aria-haspopup="menu" aria-expanded="${isOpen}" aria-controls="habit-menu-${escapeHTML(habit.id)}" data-action="toggle-habit-menu" data-id="${escapeHTML(habit.id)}">${icon('edit')}</button>
+      ${isOpen ? `<div class="habit-admin-menu" id="habit-menu-${escapeHTML(habit.id)}" role="menu">
+        <button type="button" role="menuitem" data-action="edit-habit" data-id="${escapeHTML(habit.id)}">Editar</button>
+        <button type="button" role="menuitem" data-action="habit-menu-move" data-id="${escapeHTML(habit.id)}">Mover</button>
+        <button class="danger" type="button" role="menuitem" data-action="delete-habit" data-id="${escapeHTML(habit.id)}">Eliminar</button>
+      </div>` : ''}
+    </div>`;
+  }
+
   function habitRow(habit, { compact = false, showCheck = true } = {}) {
     const checked = isDone(habit.id, today);
     const paused = habit.status === 'paused' || habitPausedOn(habit, today);
@@ -240,8 +265,8 @@
     const orderAttributes = compact ? '' : `data-habit-order-row data-habit-id="${escapeHTML(habit.id)}" data-habit-status="${escapeHTML(habit.status)}"`;
     return `<article class="card habit-row ${compact ? '' : 'manage-habit-row'}" ${orderAttributes}>
       <input ${showCheck ? '' : 'style="display:none"'} class="habit-check" type="checkbox" aria-label="Marcar ${escapeHTML(habit.name)} como completado hoy" data-action="toggle-habit" data-id="${escapeHTML(habit.id)}" ${checked ? 'checked' : ''} ${paused ? 'disabled' : ''}>
-      <div class="habit-info"><div class="habit-title-line"><h3>${escapeHTML(habit.name)}</h3>${paused ? '<span class="tag orange">En pausa</span>' : ''}${notScheduledToday ? `<span class="tag">${habit.frequency.type === 'weekly' ? 'Meta semanal' : 'No toca hoy'}</span>` : ''}${checked ? '<span class="tag green">Hecho hoy</span>' : ''}</div><p>${escapeHTML(compact ? habitTodaySubtitle(habit) : `${habit.description || frequencyLabel(habit)}${habit.goal ? ` · Objetivo: ${habit.goal}` : ''}`)}</p></div>
-      ${compact ? '' : `<div class="row-actions">${habitOrderControls(habit)}<button class="icon-btn" aria-label="Editar hábito" title="Editar" data-action="edit-habit" data-id="${escapeHTML(habit.id)}">${icon('edit')}</button><button class="icon-btn" aria-label="Eliminar hábito" title="Eliminar" data-action="delete-habit" data-id="${escapeHTML(habit.id)}">${icon('trash')}</button></div>`}
+      <div class="habit-info"><div class="habit-title-line"><i class="habit-color-dot" style="--habit-color:${escapeHTML(habit.color)}" aria-hidden="true"></i><h3>${escapeHTML(habit.name)}</h3>${paused ? '<span class="tag orange">En pausa</span>' : ''}${notScheduledToday ? `<span class="tag">${habit.frequency.type === 'weekly' ? 'Meta semanal' : 'No toca hoy'}</span>` : ''}${checked ? '<span class="tag green">Hecho hoy</span>' : ''}</div><p>${escapeHTML(compact ? habitTodaySubtitle(habit) : `${habit.description || frequencyLabel(habit)}${habit.goal ? ` · Objetivo: ${habit.goal}` : ''}`)}</p></div>
+      ${compact ? '' : `<div class="row-actions">${habitOrderControls(habit)}${paused ? `<button class="btn secondary small" data-action="resume-habit" data-id="${escapeHTML(habit.id)}">Reanudar</button>` : ''}${habitAdminMenu(habit)}</div>`}
     </article>`;
       }
     function taskCard(task, { history = false } = {}) {
@@ -286,7 +311,7 @@
     return `${pageHeader('Holaaa, anota tus tareas y revisa tu avance :3', 'De a poquito uwu')}
       ${storageProblem ? `<div class="notice error" style="margin-bottom:14px">${escapeHTML(storageProblem)}</div>` : ''}
       <section class="card hero-card"><div class="hero-top"><div><p class="eyebrow">Progreso de hábitos hoy</p><h2>${dailyDone === dailyTotal && dailyTotal ? '¡Buen trabajo!' : 'Por hacer'}</h2></div><div class="hero-number">${dailyDone}<span style="font-size:15px;opacity:.75"> / ${dailyTotal}</span></div></div><div class="progress-track"><div class="progress-fill" style="width:${ratio}%"></div></div><p class="hero-caption">${dailyTotal ? `${ratio}% de tus hábitos programados para hoy` : activeHabits.length ? 'Hoy no hay hábitos programados; puedes registrar una sesión semanal cuando quieras.' : 'Añade un hábito para comenzar a registrar tu progreso'}</p></section>
-      <section class="section"><div class="section-head"><div><h2>Tus hábitos</h2><p>Los días sin actividad prevista no cuentan como pendientes.</p></div>${addHabit}</div><div class="stack">${activeHabits.length ? activeHabits.slice(0, 5).map(h => habitRow(h, { compact: true })).join('') : emptyState('Empieza con algo pequeño', 'Crea un hábito y registra cómo te va día a día.', `<button class="btn small" data-action="open-modal" data-modal="habit">${icon('plus')} Crear hábito</button>`)}</div>${activeHabits.length > 5 ? '<p class="footnote">Y algunos más. En Hábitos puedes verlos todos.</p>' : ''}</section>
+      <section class="section"><div class="section-head"><div><h2>Tus hábitos</h2><p>Activos y en pausa; puedes desplazarte para verlos todos.</p></div>${addHabit}</div><div class="stack">${state.habits.length ? state.habits.map(h => habitRow(h, { compact: true })).join('') : emptyState('Empieza con algo pequeño', 'Crea un hábito y registra cómo te va día a día.', `<button class="btn small" data-action="open-modal" data-modal="habit">${icon('plus')} Crear hábito</button>`)}</div></section>
       <section class="section"><div class="section-head"><div><h2>Urgente</h2><p>Tareas prioritarias o con fecha vencida.</p></div><button class="text-btn" data-action="set-tab" data-tab="tasks">Ver tareas</button></div><div class="stack">${urgent.length ? urgent.map(t => taskCard(t)).join('') : '<div class="card empty"><strong>Sin urgencias por ahora</strong><p>Tu espacio está listo para lo importante.</p></div>'}</div></section>
       <section class="section"><div class="section-head"><div><h2>Próximas tareas</h2><p>Lo que sigue cuando tengas un momento.</p></div><button class="icon-btn" aria-label="Añadir tarea" data-action="open-modal" data-modal="task">${icon('plus')}</button></div><div class="stack">${upcoming.length ? upcoming.map(t => taskCard(t)).join('') : '<div class="card empty"><strong>No hay tareas próximas</strong><p>Guarda aquí las cosas que quieres resolver después.</p></div>'}</div></section>
       <section class="section"><div class="section-head"><div><h2>Proyectos personales</h2><p>Avanza a tu manera, sin presión diaria.</p></div><button class="text-btn" data-action="set-tab" data-tab="projects">Ver proyectos</button></div><div class="stack">${projects.length ? projects.map(p => projectCard(p, { compact: true })).join('') : '<div class="card empty"><strong>¿Qué te gustaría explorar?</strong><p>Un proyecto puede avanzar cuando tengas tiempo.</p><div style="margin-top:12px"><button class="btn secondary small" data-action="set-tab" data-tab="projects">Crear proyecto</button></div></div>'}</div></section>`;
@@ -302,9 +327,10 @@
     for (let i = 0; i < offset; i++) cells += '<div></div>';
     for (let day = 1; day <= count; day++) {
       const key = `${monthKey}-${String(day).padStart(2, '0')}`;
-      const status = dueStatus(habit, key);
+      const recorded = isDone(habit.id, key);
+      const status = recorded ? 'complete' : dueStatus(habit, key);
       const label = status === 'complete' ? 'completado' : status === 'pending' ? 'pendiente' : 'no correspondía';
-      cells += `<div class="calendar-cell ${status} ${key === today ? 'today' : ''}" aria-label="${day}: ${label}"><span>${day}</span>${status !== 'skip' ? '<i class="state-dot"></i>' : ''}</div>`;
+      cells += `<div class="calendar-cell ${status} ${key === today ? 'today' : ''}" aria-label="${key}: ${label}"><span>${day}</span><span class="calendar-dots">${recorded ? `<i class="calendar-habit-dot" style="--habit-color:${escapeHTML(habit.color)}" title="${escapeHTML(habit.name)}"></i>` : ''}</span></div>`;
     }
     let complete = 0;
     let denominator = 0;
@@ -326,7 +352,29 @@
     }
     const percent = denominator ? Math.round(complete * 100 / denominator) : 0;
     const progressLabel = habit.frequency.type === 'weekly' ? `Semanas cumplidas: <strong>${complete} de ${denominator} revisadas (${percent}%)</strong>. Las sesiones se registran en sus días; solo se revisa la meta el domingo.` : `Cumplimiento del mes: <strong>${percent}%</strong> (${complete} de ${denominator} días programados). Los días sin actividad prevista no cuentan.`;
-    return `<div class="card calendar-card"><div class="calendar-controls"><button class="icon-btn" aria-label="Mes anterior" data-action="calendar-shift" data-delta="-1">${icon('left')}</button><div class="calendar-title">${escapeHTML(first.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }))}</div><button class="icon-btn" aria-label="Mes siguiente" data-action="calendar-shift" data-delta="1">${icon('right')}</button></div><div class="calendar-grid">${DAY_NAMES.map(d => `<div class="calendar-day-name">${d}</div>`).join('')}${cells}</div><div class="legend"><span><i></i>Completado</span><span><i class="pending-dot"></i>Pendiente</span><span><i class="skip-dot"></i>No correspondía</span></div><p class="footnote">${progressLabel}</p></div>`;
+    return `<div class="card calendar-card"><div class="calendar-controls"><button class="icon-btn" aria-label="Mes anterior" data-action="calendar-shift" data-delta="-1">${icon('left')}</button><div class="calendar-title">${escapeHTML(first.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }))}</div><button class="icon-btn" aria-label="Mes siguiente" data-action="calendar-shift" data-delta="1">${icon('right')}</button></div><div class="calendar-grid">${DAY_NAMES.map(d => `<div class="calendar-day-name">${d}</div>`).join('')}${cells}</div><div class="legend"><span><i></i>Fondo: completado</span><span><i class="pending-dot"></i>Fondo: pendiente</span><span><i class="calendar-habit-dot" style="--habit-color:${escapeHTML(habit.color)}"></i>Punto: ${escapeHTML(habit.name)}</span></div><p class="footnote">${progressLabel}</p></div>`;
+  }
+
+  function calendarGeneralFor() {
+    const { calendarMonth: month, calendarYear: year } = ui;
+    const first = new Date(year, month, 1);
+    const offset = (first.getDay() + 6) % 7;
+    const count = new Date(year, month + 1, 0).getDate();
+    const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+    let cells = '';
+    for (let i = 0; i < offset; i++) cells += '<div class="calendar-cell-empty" aria-hidden="true"></div>';
+    for (let day = 1; day <= count; day++) {
+      const key = `${monthKey}-${String(day).padStart(2, '0')}`;
+      const completed = state.habits.filter(habit => isDone(habit.id, key));
+      const pending = state.habits.filter(habit => !isDone(habit.id, key) && dueStatus(habit, key) === 'pending');
+      const status = completed.length ? 'complete' : pending.length ? 'pending' : 'skip';
+      const names = completed.map(habit => habit.name);
+      const label = `${completed.length} completados${pending.length ? `, ${pending.length} pendientes` : ''}${names.length ? `: ${names.join(', ')}` : ''}`;
+      const dots = completed.map(habit => `<i class="calendar-habit-dot" style="--habit-color:${escapeHTML(habit.color)}" title="${escapeHTML(habit.name)}" aria-hidden="true"></i>`).join('');
+      cells += `<div class="calendar-cell ${status} ${key === today ? 'today' : ''}" aria-label="${key}: ${escapeHTML(label)}"><span class="calendar-day-number">${day}</span><span class="calendar-dots">${dots}</span></div>`;
+    }
+    const legend = state.habits.length ? `<details class="calendar-habit-legend"><summary>Colores de hábitos</summary><div class="habit-color-list">${state.habits.map(habit => `<span><i class="calendar-habit-dot" style="--habit-color:${escapeHTML(habit.color)}"></i>${escapeHTML(habit.name)}</span>`).join('')}</div></details>` : '';
+    return `<div class="card calendar-card calendar-general"><div class="calendar-controls"><button class="icon-btn" aria-label="Mes anterior" data-action="calendar-shift" data-delta="-1">${icon('left')}</button><div class="calendar-title">${escapeHTML(first.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }))}</div><button class="icon-btn" aria-label="Mes siguiente" data-action="calendar-shift" data-delta="1">${icon('right')}</button></div><div class="calendar-grid">${DAY_NAMES.map(d => `<div class="calendar-day-name">${d}</div>`).join('')}${cells}</div><div class="legend"><span><i></i>Fondo: actividad completada</span><span><i class="pending-dot"></i>Fondo: actividad pendiente</span></div><p class="footnote">Los puntos de color señalan los hábitos registrados cada día; el fondo muestra el estado general.</p>${legend}</div>`;
   }
 
   function renderHabits() {
@@ -337,8 +385,9 @@
     ui.calendarHabit = selected?.id || '';
     return `${pageHeader('Hábitos', 'Rutinas que crecen con constancia.', `<button class="btn" data-action="open-modal" data-modal="habit">${icon('plus')} Nuevo hábito</button>`)}
       ${storageProblem ? `<div class="notice error">${escapeHTML(storageProblem)}</div>` : ''}
+      <section class="section"><div class="section-head"><div><h2>Calendario general</h2><p>El fondo muestra el cumplimiento; los puntos identifican los hábitos.</p></div></div>${calendarGeneralFor()}</section>
       <section><div class="section-head"><div><h2>Hoy</h2><p>Marca tus hábitos desde Inicio; aquí puedes organizarlos y revisar su historial.</p></div><span class="tag">${active.filter(h => isScheduledToday(h) && dueStatus(h, today) === 'complete').length}/${active.filter(isScheduledToday).length} programados</span></div><div class="stack">${active.length ? active.map(h => habitRow(h, { showCheck: false })).join('') : emptyState('Aún no hay hábitos activos', 'Puedes crear uno nuevo o reanudar un hábito en pausa.')}</div></section>
-      ${paused.length ? `<section class="section"><div class="section-head"><div><h2>En pausa</h2><p>Su historial sigue guardado.</p></div></div><div class="stack">${paused.map(h => `<article class="card habit-row manage-habit-row" data-habit-order-row data-habit-id="${escapeHTML(h.id)}" data-habit-status="paused"><div class="habit-info"><div class="habit-title-line"><h3>${escapeHTML(h.name)}</h3><span class="tag orange">En pausa</span></div><p>${escapeHTML(h.description || frequencyLabel(h))}</p></div><div class="row-actions">${habitOrderControls(h)}<button class="btn secondary small" data-action="resume-habit" data-id="${escapeHTML(h.id)}">Reanudar</button><button class="icon-btn" aria-label="Editar hábito" data-action="edit-habit" data-id="${escapeHTML(h.id)}">${icon('edit')}</button><button class="icon-btn" aria-label="Eliminar hábito" data-action="delete-habit" data-id="${escapeHTML(h.id)}">${icon('trash')}</button></div></article>`).join('')}</div></section>` : ''}
+      ${paused.length ? `<section class="section"><div class="section-head"><div><h2>En pausa</h2><p>Su historial sigue guardado.</p></div></div><div class="stack">${paused.map(h => habitRow(h, { showCheck: false })).join('')}</div></section>` : ''}
       ${selected ? `<section class="section"><div class="section-head"><div><h2>Seguimiento</h2><p>Elige un hábito y consulta el mes.</p></div></div><div style="margin-bottom:10px"><select class="select" aria-label="Hábito del calendario" data-action="calendar-select">${state.habits.map(h => `<option value="${escapeHTML(h.id)}" ${h.id === selected.id ? 'selected' : ''}>${escapeHTML(h.name)}</option>`).join('')}</select></div>${calendarFor(selected)}</section>` : ''}`;
   }
 
@@ -386,6 +435,7 @@
   function habitForm(habit) {
     const f = habit?.frequency || { type: 'daily', days: [], times: 3 };
     const picked = f.type === 'weekdays' ? f.days : [];
+    const color = habit?.color || ui.newHabitColor || nextHabitColor();
     return `<div class="modal-backdrop" data-action="backdrop-close"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">${habit ? 'Editar hábito' : 'Nuevo hábito'}</h2><button class="icon-btn" data-action="close-modal" aria-label="Cerrar">${icon('close')}</button></div>
       <form class="form-grid" data-form="habit" data-id="${habit ? escapeHTML(habit.id) : ''}">
         <div class="field"><label for="habit-name">Nombre</label><input id="habit-name" name="name" required maxlength="80" placeholder="Ej. Estudiar 20 minutos" value="${escapeHTML(habit?.name || '')}"></div>
@@ -395,6 +445,7 @@
         <div class="field" id="weekly-fields" style="${f.type === 'weekly' ? '' : 'display:none'}"><label for="habit-times">Veces por semana</label><input id="habit-times" name="times" type="number" min="1" max="7" value="${f.type === 'weekly' ? f.times : 3}"><small>Puedes registrar la sesión cualquier día. La revisión semanal se hace el domingo.</small></div>
         <div class="field"><label for="habit-goal">Objetivo opcional</label><input id="habit-goal" name="goal" maxlength="80" placeholder="Ej. 20 minutos, 2,5 litros" value="${escapeHTML(habit?.goal || '')}"></div>
         <div class="field"><label for="habit-start">Fecha de inicio</label><input id="habit-start" name="startDate" type="date" required value="${escapeHTML(habit?.startDate || today)}"></div>
+        <div class="field habit-color-field"><label for="habit-color">Color del hábito</label><div class="habit-color-input"><input id="habit-color" name="color" type="color" value="${escapeHTML(color)}"><span>Identifica este hábito en las listas y calendarios.</span></div></div>
         ${habit ? `<div class="field"><label for="habit-status">Estado</label><select id="habit-status" name="status"><option value="active" ${habit.status === 'active' ? 'selected' : ''}>Activo</option><option value="paused" ${habit.status === 'paused' ? 'selected' : ''}>En pausa</option></select></div>` : ''}
         <div class="form-actions"><button type="button" class="btn ghost" data-action="close-modal">Cancelar</button><button class="btn" type="submit">${habit ? 'Guardar cambios' : 'Crear hábito'}</button></div>
       </form></section></div>`;
@@ -447,8 +498,13 @@
     habit.status = next;
   }
 
-  function openModal(type, id = '') { ui.modal = `${type}${id ? `:${id}` : ''}`; render(); }
-  function closeModal() { ui.modal = null; render(); }
+  function openModal(type, id = '') {
+    ui.modal = `${type}${id ? `:${id}` : ''}`;
+    ui.habitMenuId = '';
+    if (type === 'habit' && !id) ui.newHabitColor = nextHabitColor();
+    render();
+  }
+  function closeModal() { ui.modal = null; ui.newHabitColor = null; render(); }
 
   // Estado temporal del gesto de arrastre. No modifica los datos hasta soltar el hábito.
   let habitDrag = null;
@@ -546,12 +602,31 @@
 
   app.addEventListener('click', event => {
     const button = event.target.closest('[data-action]');
-    if (!button) return;
+    if (!button) {
+      if (ui.habitMenuId) { ui.habitMenuId = ''; render(); }
+      return;
+    }
     const action = button.dataset.action;
     const id = button.dataset.id;
-    if (action === 'set-tab') { ui.tab = button.dataset.tab; ui.modal = null; render(); window.scrollTo(0, 0); }
+    if (action === 'set-tab') { ui.tab = button.dataset.tab; ui.modal = null; ui.habitMenuId = ''; render(); window.scrollTo(0, 0); }
     if (action === 'open-modal') openModal(button.dataset.modal);
-    if (action === 'edit-habit') openModal('habit', id); if (action === 'move-habit') { const habit = state.habits.find(item => item.id === id); const siblings = habit ? state.habits.filter(item => item.status === habit.status) : []; const current = siblings.findIndex(item => item.id === id); if (moveHabitToPosition(id, current + Number(button.dataset.direction))) commit('Orden de hábitos actualizado.'); }
+    if (action === 'toggle-habit-menu') { ui.habitMenuId = ui.habitMenuId === id ? '' : id; render(); }
+    if (action === 'edit-habit') openModal('habit', id);
+    if (action === 'habit-menu-move') {
+      ui.habitMenuId = '';
+      render();
+      const row = [...document.querySelectorAll('[data-habit-order-row]')].find(item => item.dataset.habitId === id);
+      const isMobile = window.matchMedia('(hover: none) and (pointer: coarse)').matches || window.innerWidth < 700;
+      const target = isMobile ? row?.querySelector('.habit-drag-handle') : row?.querySelector('.order-btn:not(:disabled)');
+      target?.focus();
+      showToast(isMobile ? 'Mantén pulsada el asa y arrastra el hábito.' : 'Usa las flechas para cambiar la posición.');
+    }
+    if (action === 'move-habit') {
+      const habit = state.habits.find(item => item.id === id);
+      const siblings = habit ? state.habits.filter(item => item.status === habit.status) : [];
+      const current = siblings.findIndex(item => item.id === id);
+      if (moveHabitToPosition(id, current + Number(button.dataset.direction))) commit('Orden de hábitos actualizado.');
+    }
     if (action === 'edit-task') openModal('task', id);
     if (action === 'edit-project') openModal('project', id);
     if (action === 'close-modal') closeModal();
@@ -612,6 +687,10 @@
     }
   });
 
+  app.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && ui.habitMenuId) { ui.habitMenuId = ''; render(); }
+  });
+
   app.addEventListener('change', event => {
     const target = event.target;
     if (target.matches('[data-action="calendar-select"]')) { ui.calendarHabit = target.value; render(); }
@@ -636,17 +715,18 @@
     if (form.dataset.form === 'habit') {
       const name = String(data.get('name') || '').trim();
       const frequency = { type: String(data.get('frequency')), days: data.getAll('days').map(Number), times: Math.max(1, Math.min(7, Number(data.get('times')) || 1)) };
+      const color = validHexColor(String(data.get('color') || ''), ui.newHabitColor || nextHabitColor());
       if (frequency.type === 'weekdays' && !frequency.days.length) { showToast('Elige al menos un día de la semana.'); return; }
       const existing = state.habits.find(h => h.id === id);
       if (existing) {
-        Object.assign(existing, { name, description: String(data.get('description') || '').trim(), goal: String(data.get('goal') || '').trim(), startDate: String(data.get('startDate')), frequency });
+        Object.assign(existing, { name, description: String(data.get('description') || '').trim(), goal: String(data.get('goal') || '').trim(), startDate: String(data.get('startDate')), frequency, color });
         if (data.get('status')) setHabitStatus(existing, String(data.get('status')));
         commit('Hábito actualizado.');
       } else {
-        state.habits.push({ id: uid(), name, description: String(data.get('description') || '').trim(), goal: String(data.get('goal') || '').trim(), startDate: String(data.get('startDate')), status: 'active', frequency, pausePeriods: [] });
+        state.habits.push({ id: uid(), name, description: String(data.get('description') || '').trim(), goal: String(data.get('goal') || '').trim(), color, startDate: String(data.get('startDate')), status: 'active', frequency, pausePeriods: [] });
         commit('Hábito creado.');
       }
-      ui.modal = null; render();
+      ui.modal = null; ui.newHabitColor = null; render();
     }
     if (form.dataset.form === 'task') {
       const fields = { name: String(data.get('name') || '').trim(), description: String(data.get('description') || '').trim(), category: String(data.get('category')), dueDate: String(data.get('dueDate') || '') };

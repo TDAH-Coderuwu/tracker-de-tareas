@@ -8,6 +8,7 @@
   const HABIT_COLORS = ['#3478c8', '#e38b32', '#8661c5', '#238c78', '#d35269', '#668f36', '#397aa0', '#c34e9a', '#a06a32', '#5a68c8', '#bd704f', '#458b51'];
   const app = document.getElementById('app');
   const toastEl = document.getElementById('toast');
+  let pwaThemeColorMeta = document.getElementById('pwa-theme-color');
 
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
   const localDate = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -139,7 +140,9 @@
       for (const name of ['--bg','--surface','--surface-soft','--text','--muted','--line','--accent-soft','--shadow']) root.style.removeProperty(name);
     }
 
-    // PWA hint only: the browser/Android still owns the native navigation bar and icon flags.
+    // Chrome uses this live theme-color hint for installed PWA system chrome.
+    // Android still chooses the navigation icon contrast; web content has no
+    // native navigationBarColor / light-navigation-icon API.
     const systemNavColor=isDark||isCustom?'#000000':'#f6f7fb';
     root.style.setProperty('--system-nav-bg',systemNavColor);
     root.style.setProperty('--accent',primary);
@@ -152,11 +155,15 @@
     root.style.setProperty('--hero-start',ensureTextContrast(primary,heroText));
     root.style.setProperty('--hero-end',ensureTextContrast(secondary,heroText));
 
-    const meta=document.createElement('meta');
-    meta.name='theme-color';
-    meta.content=systemNavColor;
-    const current=document.querySelector('meta[name="theme-color"]');
-    if (current) current.replaceWith(meta); else document.head.append(meta);
+    if (pwaThemeColorMeta) pwaThemeColorMeta.content=systemNavColor;
+    else {
+      const meta=document.createElement('meta');
+      meta.id='pwa-theme-color';
+      meta.name='theme-color';
+      meta.content=systemNavColor;
+      document.head.append(meta);
+      pwaThemeColorMeta=meta;
+    }
   }
   applyTheme();
 

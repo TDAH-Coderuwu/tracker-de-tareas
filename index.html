@@ -5,18 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta id="pwa-theme-color" name="theme-color" content="#f6f7fb">
 <script>
-  // Apply the saved app appearance to Android's PWA chrome before the
-  // manifest and first paint are processed. app.js remains the source of truth
-  // and updates this same hint whenever the user changes appearance.
   try {
     const saved = JSON.parse(localStorage.getItem('ritmo.personal.v1') || 'null');
     const appearance = saved?.settings?.appearance || (saved?.settings?.theme === 'dark' ? 'dark' : 'light');
     const systemNavColor = ['dark', 'custom', 'complementary'].includes(appearance) ? '#000000' : '#f6f7fb';
     document.getElementById('pwa-theme-color').content = systemNavColor;
     document.documentElement.style.setProperty('--system-nav-bg', systemNavColor);
-  } catch (_) {
-    // A missing or unreadable preference falls back to the light default.
-  }
+  } catch (_) {}
 </script>
 <meta name="description" content="Tracker de tareas :D — organiza hábitos, tareas y proyectos personales.">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -30,6 +25,6 @@
 <body>
 <div class="app-shell" id="app"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script src="" defer></script>
+<script src="app.js?v=20261108-history" defer></script>
 </body>
 </html>

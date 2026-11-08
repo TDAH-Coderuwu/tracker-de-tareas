@@ -407,7 +407,7 @@
       const recorded = isDone(habit.id, key);
       const status = recorded ? 'complete' : dueStatus(habit, key);
       const label = status === 'complete' ? 'completado' : status === 'pending' ? 'pendiente' : 'no correspondía';
-      cells += `<div class="calendar-cell ${status} ${key === today ? 'today' : ''}" role="button" tabindex="${key <= today && key >= habit.startDate && !habitPausedOn(habit, key) ? '0' : '-1'}" data-action="toggle-habit-date" data-id="${escapeHTML(habit.id)}" data-date="${key}" aria-label="${escapeHTML(formatDate(key, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}: ${label}. Toca para marcar o desmarcar" aria-pressed="${recorded}" aria-disabled="${key > today || key < habit.startDate || habitPausedOn(habit, key)}"><span>${day}</span><span class="calendar-dots">${recorded ? `<i class="calendar-habit-dot" style="--habit-color:${escapeHTML(habit.color)}" title="${escapeHTML(habit.name)}"></i>` : ''}</span></div>`;
+      cells += `<div class="calendar-cell ${status} ${key === today ? 'today' : ''}" role="button" tabindex="${key <= today && key >= habit.startDate && !habitPausedOn(habit, key) ? '0' : '-1'}" data-action="open-date-editor" data-id="${escapeHTML(habit.id)}" data-date="${key}" aria-label="${escapeHTML(formatDate(key, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}: ${label}. Toca para editar esta fecha"  aria-disabled="${key > today || key < habit.startDate || habitPausedOn(habit, key)}"><span>${day}</span><span class="calendar-dots">${recorded ? `<i class="calendar-habit-dot" style="--habit-color:${escapeHTML(habit.color)}" title="${escapeHTML(habit.name)}"></i>` : ''}</span></div>`;
     }
     let complete = 0;
     let denominator = 0;
@@ -448,7 +448,7 @@
       const names = completed.map(habit => habit.name);
       const label = `${completed.length} completados${pending.length ? `, ${pending.length} pendientes` : ''}${names.length ? `: ${names.join(', ')}` : ''}`;
       const dots = completed.map(habit => `<i class="calendar-habit-dot" style="--habit-color:${escapeHTML(habit.color)}" title="${escapeHTML(habit.name)}" aria-hidden="true"></i>`).join('');
-      cells += `<div class="calendar-cell ${status} ${key === today ? 'today' : ''}" aria-label="${key}: ${escapeHTML(label)}"><span class="calendar-day-number">${day}</span><span class="calendar-dots">${dots}</span></div>`;
+      cells += `<div class="calendar-cell ${status} ${key === today ? 'today' : ''}" role="button" tabindex="${key <= today ? '0' : '-1'}" data-action="open-date-editor" data-date="${key}" aria-label="${key}: ${escapeHTML(label)}"><span class="calendar-day-number">${day}</span><span class="calendar-dots">${dots}</span></div>`;
     }
     const legend = state.habits.length ? `<details class="calendar-habit-legend"><summary>Colores de hábitos</summary><div class="habit-color-list">${state.habits.map(habit => `<span><i class="calendar-habit-dot" style="--habit-color:${escapeHTML(habit.color)}"></i>${escapeHTML(habit.name)}</span>`).join('')}</div></details>` : '';
     return `<div class="card calendar-card calendar-general"><div class="calendar-controls"><button class="icon-btn" aria-label="Mes anterior" data-action="calendar-shift" data-delta="-1">${icon('left')}</button><div class="calendar-title">${escapeHTML(first.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }))}</div><button class="icon-btn" aria-label="Mes siguiente" data-action="calendar-shift" data-delta="1">${icon('right')}</button></div><div class="calendar-grid">${DAY_NAMES.map(d => `<div class="calendar-day-name">${d}</div>`).join('')}${cells}</div><div class="legend"><span><i></i>Fondo: actividad completada</span><span><i class="pending-dot"></i>Fondo: actividad pendiente</span></div><p class="footnote">Los puntos de color señalan los hábitos registrados cada día; el fondo muestra el estado general.</p>${legend}</div>`;
@@ -462,7 +462,7 @@
     ui.calendarHabit = selected?.id || '';
     return `${pageHeader('Hábitos', 'Rutinas que crecen con constancia.', `<button class="btn" data-action="open-modal" data-modal="habit">${icon('plus')} Nuevo hábito</button>`)}
       ${storageProblem ? `<div class="notice error">${escapeHTML(storageProblem)}</div>` : ''}
-      <section class="section"><div class="section-head"><div><h2>Calendario general</h2><p>El fondo muestra el cumplimiento; los puntos identifican los hábitos.</p></div></div>${calendarGeneralFor()}</section>
+      <section class="section"><div class="section-head"><div><h2>Calendario general</h2><p>Toca un día pasado para revisar los hábitos y confirmar cambios.</p></div></div>${calendarGeneralFor()}</section>
       <section><div class="section-head"><div><h2>Hoy</h2><p>Marca tus hábitos desde Inicio; aquí puedes organizarlos y revisar su historial.</p></div><span class="tag">${active.filter(h => isScheduledToday(h) && dueStatus(h, today) === 'complete').length}/${active.filter(isScheduledToday).length} programados</span></div><div class="stack">${active.length ? active.map(h => habitRow(h, { showCheck: false })).join('') : emptyState('Aún no hay hábitos activos', 'Puedes crear uno nuevo o reanudar un hábito en pausa.')}</div></section>
       ${paused.length ? `<section class="section"><div class="section-head"><div><h2>En pausa</h2><p>Su historial sigue guardado.</p></div></div><div class="stack">${paused.map(h => habitRow(h, { showCheck: false })).join('')}</div></section>` : ''}
       ${selected ? `<section class="section"><div class="section-head"><div><h2>Seguimiento</h2><p>Elige un hábito y consulta el mes.</p></div></div><div style="margin-bottom:10px"><select class="select" aria-label="Hábito del calendario" data-action="calendar-select">${state.habits.map(h => `<option value="${escapeHTML(h.id)}" ${h.id === selected.id ? 'selected' : ''}>${escapeHTML(h.name)}</option>`).join('')}</select></div>${calendarFor(selected)}</section>` : ''}`;
@@ -549,12 +549,20 @@
     </form></section></div>`;
   }
 
+  function habitDateForm(date) {
+    const eligible = state.habits.filter(h => date <= today && date >= h.startDate && !habitPausedOn(h, date) && (isDone(h.id, date) || h.frequency.type === 'weekly' || habitIsDue(h, date)));
+    const dateLabel = escapeHTML(formatDate(date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
+    const rows = eligible.map(h => `<label class="date-habit-option"><input type="checkbox" name="habitIds" value="${escapeHTML(h.id)}" ${isDone(h.id, date) ? 'checked' : ''}><span><strong>${escapeHTML(h.name)}</strong><small>${escapeHTML(h.goal || frequencyLabel(h))}</small></span></label>`).join('');
+    return `<div class="modal-backdrop" data-action="backdrop-close"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><div><h2 id="modal-title">Editar hábitos</h2><p class="subtitle date-editor-date">${dateLabel}</p></div><button class="icon-btn" data-action="close-modal" aria-label="Cerrar">${icon('close')}</button></div><p class="footnote date-editor-help">Revisa cada hábito de esta fecha. Nada se guarda hasta que confirmes.</p><form class="form-grid" data-form="habit-date" data-date="${escapeHTML(date)}"><div class="date-habit-list">${rows || '<p class="footnote">No hay hábitos programados para esta fecha.</p>'}</div><div class="form-actions"><button type="button" class="btn ghost" data-action="close-modal">Cancelar</button><button class="btn" type="submit" ${eligible.length ? '' : 'disabled'}>Guardar cambios</button></div></form></section></div>`;
+  }
+
   function modalMarkup() {
     if (!ui.modal) return '';
     const [type, id] = ui.modal.split(':');
     if (type === 'habit') return habitForm(state.habits.find(h => h.id === id));
     if (type === 'task') return taskForm(state.tasks.find(t => t.id === id));
     if (type === 'project') return projectForm(state.projects.find(p => p.id === id));
+    if (type === 'habit-date') return habitDateForm(id);
     return '';
   }
     function render() {
@@ -708,6 +716,11 @@
     if (action === 'edit-project') openModal('project', id);
     if (action === 'close-modal') closeModal();
     if (action === 'backdrop-close' && event.target === button) closeModal();
+    if (action === 'open-date-editor') {
+      const date = button.dataset.date;
+      if (!date || date > today) return;
+      openModal('habit-date', date);
+    }
     if (action === 'toggle-habit') {
       const logs = state.habitLogs[id] ||= {};
       if (logs[today]) delete logs[today]; else logs[today] = true;
@@ -789,6 +802,25 @@
     event.preventDefault();
     const data = new FormData(form);
     const id = form.dataset.id;
+    if (form.dataset.form === 'habit-date') {
+      const date = form.dataset.date;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || date > today) { ui.modal = null; render(); return; }
+      const selectedIds = new Set(data.getAll('habitIds').map(String));
+      let changed = 0;
+      for (const habit of state.habits) {
+        const editable = date >= habit.startDate && !habitPausedOn(habit, date) && (isDone(habit.id, date) || habit.frequency.type === 'weekly' || habitIsDue(habit, date));
+        if (!editable) continue;
+        const before = isDone(habit.id, date);
+        const after = selectedIds.has(habit.id);
+        if (before === after) continue;
+        const logs = state.habitLogs[habit.id] ||= {};
+        if (after) logs[date] = true; else delete logs[date];
+        changed++;
+      }
+      ui.modal = null;
+      commit(changed ? `Se guardaron ${changed} cambio${changed === 1 ? '' : 's'} para el ${formatDate(date)}.` : 'No había cambios que guardar.');
+      return;
+    }
     if (form.dataset.form === 'habit') {
       const name = String(data.get('name') || '').trim();
       const frequency = { type: String(data.get('frequency')), days: data.getAll('days').map(Number), times: Math.max(1, Math.min(7, Number(data.get('times')) || 1)) };

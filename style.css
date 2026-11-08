@@ -159,8 +159,9 @@ h3 { font:700 15px/1.3 system-ui, sans-serif; margin:0; }
 .calendar-title { font:700 14px system-ui,sans-serif; }
 .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; text-align:center; }
 .calendar-day-name { color:var(--muted);font-size:9px;font-weight:700;padding:4px 0 7px; }
-.calendar-cell { width:100%; aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; border-radius:10px; color:var(--muted); font-size:11px; }
-.calendar-cell { width:100%; aspect-ratio:1; background:var(--green-soft);color:var(--green);font-weight:700; }
+.calendar-cell { width:100%; aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; border-radius:10px; color:var(--muted); font-size:11px; }.calendar-cell { width:100%; aspect-ratio:1; background:var(--surface-soft);color:var(--muted);font-weight:700; }
+.calendar-cell.complete { background:var(--green-soft);color:var(--green); }
+.calendar-cell.skip { background:var(--surface-soft);color:var(--muted); }
 .calendar-cell.pending { background:var(--orange-soft);color:var(--orange); }
 .calendar-cell.today { outline:1.5px solid var(--accent); outline-offset:-1px; }
 .calendar-cell .state-dot { width:5px;height:5px;border-radius:50%;background:currentColor; }

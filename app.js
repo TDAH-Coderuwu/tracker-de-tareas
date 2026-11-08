@@ -407,7 +407,7 @@
       const recorded = isDone(habit.id, key);
       const status = recorded ? 'complete' : dueStatus(habit, key);
       const label = status === 'complete' ? 'completado' : status === 'pending' ? 'pendiente' : 'no correspondía';
-      cells += `<div class="calendar-cell ${status} ${key === today ? 'today' : ''}" aria-label="${key}: ${label}"><span>${day}</span><span class="calendar-dots">${recorded ? `<i class="calendar-habit-dot" style="--habit-color:${escapeHTML(habit.color)}" title="${escapeHTML(habit.name)}"></i>` : ''}</span></div>`;
+      cells += `<div class="calendar-cell ${status} ${key === today ? 'today' : ''}" role="button" tabindex="${key <= today && key >= habit.startDate && !habitPausedOn(habit, key) ? '0' : '-1'}" data-action="toggle-habit-date" data-id="${escapeHTML(habit.id)}" data-date="${key}" aria-label="${escapeHTML(formatDate(key, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}: ${label}. Toca para marcar o desmarcar" aria-pressed="${recorded}" aria-disabled="${key > today || key < habit.startDate || habitPausedOn(habit, key)}"><span>${day}</span><span class="calendar-dots">${recorded ? `<i class="calendar-habit-dot" style="--habit-color:${escapeHTML(habit.color)}" title="${escapeHTML(habit.name)}"></i>` : ''}</span></div>`;
     }
     let complete = 0;
     let denominator = 0;

@@ -171,6 +171,14 @@ h3 { font:700 15px/1.3 system-ui, sans-serif; margin:0; }
 .legend i.calendar-habit-dot { width:8px;height:8px;background:var(--habit-color); }
 .legend .skip-dot { background:var(--line); }
 .select { min-height:40px; border:1px solid var(--line); background:var(--surface); color:var(--text); border-radius:12px; padding:0 11px; }
+.date-editor-date { margin:4px 0 0; }
+.date-editor-help { margin:0 0 4px; }
+.date-habit-list { display:grid;gap:8px;max-height:min(48vh,420px);overflow:auto; }
+.date-habit-option { display:flex;align-items:center;gap:12px;min-height:54px;padding:10px 12px;border:1px solid var(--line);border-radius:13px;background:var(--bg);cursor:pointer; }
+.date-habit-option input { width:20px;height:20px;flex:0 0 auto;accent-color:var(--accent); }
+.date-habit-option span { display:grid;gap:3px; }
+.date-habit-option strong { font-size:13px; }
+.date-habit-option small { color:var(--muted);font-size:10px; }
 .category-block { margin-top:20px; }
 .category-heading { display:flex;align-items:center;gap:8px;margin:0 0 10px;font:700 13px system-ui,sans-serif; }
 .category-count { display:grid;place-items:center;min-width:22px;height:22px;border-radius:8px;background:var(--surface-soft);color:var(--muted);font-size:10px; }
